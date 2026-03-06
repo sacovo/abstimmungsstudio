@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+
+    volumes:
+      - ../..:/workspaces:cached
+
+    command: sleep infinity
+
+
+  db:
+    image: postgres:latest
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_DB: postgres
+      POSTGRES_PASSWORD: postgres
+    
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+
+  influx:
+    image: influxdb:2
+    restart: unless-stopped
+    volumes:
+      - influx-data:/var/lib/influxdb2
+    environment:
+      INFLUXDB_ADMIN_USER: admin
+      INFLUXDB_ADMIN_PASSWORD: admin
+      INFLUXDB_DB: mydb
+    ports:
+      - 8086:8086
+
+volumes:
+  postgres-data:
+  influx-data:
