@@ -88,19 +88,17 @@ def get_geo_id_list(stand: GeoStand, kanton_id: int | None = None) -> list[int]:
     if kanton_id is not None:
         gemeinden = gemeinden.filter(kanton_id=kanton_id)
 
-    for gemeinde in gemeinden.order_by("geo_id"):
-        ids.append(gemeinde.geo_id)
+    ids = list(gemeinden.order_by("geo_id").values_list("geo_id", flat=True))
 
     remove_ids = set()
 
-    kreise = Zaehlkreis.objects.filter(gemeinde__stand=stand)
+    # For kantonal level the zaehlkreise are not used
     if kanton_id is not None:
-        kreise = kreise.filter(gemeinde__kanton_id=kanton_id)
+        return ids
 
-    for zaehlkreis in kreise.order_by("geo_id"):
-        # Remove the parent Gemeinde geo_id
-        remove_ids.add(zaehlkreis.gemeinde.geo_id)
-        ids.append(zaehlkreis.geo_id)
+    kreise = Zaehlkreis.objects.filter(gemeinde__stand=stand)
+    ids.extend(list(kreise.order_by("geo_id").values_list("geo_id", flat=True)))
+    remove_ids = set(kreise.values_list("gemeinde__geo_id", flat=True))
 
     ids = [id for id in ids if id not in remove_ids]
     return ids

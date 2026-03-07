@@ -6,8 +6,8 @@ from ninja.pagination import paginate
 import polars as pl
 
 from abst.geo import get_geo_id_list
-from abst.models import Kanton, Vorlage
-from abst.schema import GemeindeResult, KantonSchema, ResultsGemeindeSchema, ResultsKantonSchema, ResultsTotalSchema, VorlageListingSchema
+from abst.models import Gemeinde, Kanton, Vorlage, Zaehlkreis
+from abst.schema import GemeindeResult, GemeindeSchema, KantonSchema, ResultsGemeindeSchema, ResultsKantonSchema, ResultsTotalSchema, VorlageListingSchema
 from abst.store import get_abst_result_history, get_abst_result_kantone, get_abst_result_total, get_abst_results
 from abst.predict import predict_results, prepare_predict_data
 
@@ -22,13 +22,37 @@ def get_kantone(request):
 
 @router.get("vorlagen", response=list[VorlageListingSchema])
 @paginate(per_page=50)
-def get_vorlagen(request, region: str | None = None, date: str | None = None):
-    vorlagen = Vorlage.objects.all().order_by("-tag__date", "vorlagen_id")
+def get_vorlagen(request, region: str | None = None, date: str | None = None, name: str | None = None, sort_by: str | None = None, sort_dir: str | None = None):
+    vorlagen = Vorlage.objects.all()
     if region is not None:
         vorlagen = vorlagen.filter(region=region)
 
     if date is not None:
         vorlagen = vorlagen.filter(tag__date=date)
+
+    if name is not None:
+        vorlagen = vorlagen.filter(name__icontains=name.lower())
+
+    if sort_by:
+        valid_sort_fields = {
+            "vorlagen_id": "vorlagen_id",
+            "name": "name",
+            "region": "region",
+            "finished": "finished",
+            "angenommen": "angenommen",
+            "result.jaStimmenInProzent": "result__jaStimmenInProzent",
+            "result.stimmbeteiligungInProzent": "result__stimmbeteiligungInProzent",
+        }
+        if sort_by in valid_sort_fields:
+            sort_field = valid_sort_fields[sort_by]
+            if sort_dir == "desc":
+                sort_field = "-" + sort_field
+            vorlagen = vorlagen.order_by(sort_field)
+        else:
+            vorlagen = vorlagen.order_by("-tag__date", "vorlagen_id")
+    else:
+        vorlagen = vorlagen.order_by("-tag__date", "vorlagen_id")
+
     return vorlagen
 
 
@@ -48,10 +72,49 @@ def get_results_kantone(request, vorlage_id: int):
     return get_abst_result_kantone(vorlage_id).to_dicts()
 
 
+@router.get("{vorlage_id}/gemeinden/stand", response=list[GemeindeSchema])
+def get_gemeinden_stand(request, vorlage_id: int):
+    vorlage = Vorlage.objects.get(vorlagen_id=vorlage_id)
+    stand = vorlage.tag.stand
+
+    if not stand.document:
+        return []
+
+    gemeinden = Gemeinde.objects.filter(
+        stand=stand
+    ).order_by("geo_id")
+
+    return gemeinden
+
+
+@router.get("{vorlage_id}/zaehlkreise/stand", response=list[GemeindeSchema])
+def get_zaehlkreise_stand(request, vorlage_id: int):
+    vorlage = Vorlage.objects.get(vorlagen_id=vorlage_id)
+    stand = vorlage.tag.stand
+
+    if not stand.document:
+        return []
+
+    zaehlkreise = Zaehlkreis.objects.filter(
+        gemeinde__stand=stand
+    ).select_related("gemeinde").order_by("geo_id")
+
+    return [
+        {
+            "name": z.name,
+            "geo_id": z.geo_id,
+            "kanton": z.gemeinde.kanton,
+            "kanton_id": z.gemeinde.kanton_id
+        }
+        for z in zaehlkreise
+    ]
+
+
 @router.get("{vorlage_id}/gemeinden", response=list[ResultsGemeindeSchema])
 def get_results_gemeinden(request, vorlage_id: int):
     vorlage = Vorlage.objects.get(vorlagen_id=vorlage_id)
 
+    t0 = time.time()
     if vorlage.kantonal:
         kanton = Kanton.objects.get(short=vorlage.region)
         geo_ids = get_geo_id_list(
@@ -60,8 +123,11 @@ def get_results_gemeinden(request, vorlage_id: int):
         geo_ids = get_geo_id_list(vorlage.tag.stand)
 
     df_geo = pl.DataFrame({"geo_id": geo_ids})
+    print(f"Geo IDs loaded in {time.time() - t0:.2f} seconds")
+    t0 = time.time()
 
     df_results = get_abst_results(vorlage_id)
+    print(f"Results loaded in {time.time() - t0:.2f} seconds")
     df_merged = df_geo.join(df_results, on="geo_id", how="left").filter(
         pl.col("ja_prozent").is_not_null())
 

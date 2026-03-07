@@ -105,7 +105,11 @@ def import_tag(tag: Abstimmungstag):
 def fetch_results_kantonal(json_url) -> tuple[list[GemeindeResult], list[VorlageSchema]]:
     data = requests.get(json_url).json()
 
-    timestamp = datetime.datetime.now().timestamp()
+    date = datetime.datetime.strptime(data["abstimmtag"], "%Y%m%d")
+    if date.date() < date.today().date():
+        timestamp = date.replace(hour=18).timestamp()
+    else:
+        timestamp = datetime.datetime.now().timestamp()
 
     results = []
     vorlagen = []
@@ -153,17 +157,18 @@ def fetch_results_kantonal(json_url) -> tuple[list[GemeindeResult], list[Vorlage
 
 
 def fetch_results_eidg(json_url) -> tuple[list[GemeindeResult], list[VorlageSchema]]:
-    data = requests.get(json_url).json()["schweiz"]["vorlagen"]
+    data = requests.get(json_url).json()
 
-    # 20260308
     date = datetime.datetime.strptime(data["abstimmtag"], "%Y%m%d")
-    if date.date() < date.today():
+    if date.date() < date.today().date():
         timestamp = date.replace(hour=18).timestamp()
     else:
         timestamp = datetime.datetime.now().timestamp()
 
     results = []
     vorlagen = []
+
+    data = data["schweiz"]["vorlagen"]
 
     for vorlage in data:
         vorlage_results = []

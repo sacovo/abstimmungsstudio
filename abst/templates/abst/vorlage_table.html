@@ -1,0 +1,34 @@
+{% extends 'abst/base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container" style="margin-top: 2rem;">
+    <h4>{{ vorlage.name }} - Gemeinden Resultate</h4>
+    
+    <div x-data="gemeindenTableView('{{ vorlage.vorlagen_id }}')" x-init="init()">
+        <div class="row">
+            <div class="input-field col s12 m5">
+                <input type="text" id="searchInput" x-model="search" @input="updateFilter">
+                <label for="searchInput">Suche nach ID, Name oder Kanton</label>
+            </div>
+            <div class="input-field col s12 m5">
+                <select x-model="statusFilter" @change="updateFilter" x-ref="statusSelect">
+                    <option value="">Alle</option>
+                    <option value="final">Ausgezählt</option>
+                    <option value="prediction">Hochrechnung</option>
+                </select>
+                <label>Status Filter</label>
+            </div>
+            <div class="col s12 m2 right-align" style="margin-top: 20px;">
+                <button class="btn waves-effect waves-light" @click="loadData()">
+                    <i class="material-symbols-outlined left">refresh</i>Aktualisieren
+                </button>
+            </div>
+        </div>
+
+        <div id="gemeinden-table"></div>
+    </div>
+</div>
+
+<script src="{% static 'abst/js/table.js' %}"></script>
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "abst/base.html" %}
+{% load static %}
+{% block content %}
+<div class="container" x-data="vorlagenView()" x-init="init()" style="margin-top: 2rem;">
+    <h4>Abstimmungsvorlagen</h4>
+
+    <div id="vorlagen-table"></div>
+</div>
+
+<script src="{% static 'abst/js/index.js' %}"></script>
+{% endblock %}
+
