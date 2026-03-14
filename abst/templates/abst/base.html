@@ -1,6 +1,7 @@
 {% load static %}
 <!DOCTYPE html>
 <html lang="de">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -16,6 +17,7 @@
     </style>
 
 </head>
+
 <body>
     <header>
         <nav>
@@ -23,21 +25,47 @@
             {% endblock %}
         </nav>
     </header>
-    
+
 
     <main>
-    {% block content %}
-    {% endblock %}
+        {% block content %}
+        {% endblock %}
     </main>
-    
+
     <footer>
-        <div class="container">
-            <span>&copy; 2024 Abstimmungsstudio</span>
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col s12 footer-nav">
+                    <h3>
+                        <a href="https://digitalorganizing.ch/" target="_blank">digital/organizing</a>
+                    </h3>
+                    <h3>Weitere Informationen</h3>
+                    <a href="https://digitalorganizing.ch/impressum/" target="_blank">Impressum</a>
+                    <a href="https://digitalorganizing.ch/datenschutz/" target="_blank">Datenschutz</a>
+                    <a href="mailto:kontakt@digitalorganizing.ch">kontakt@digitalorganizing.ch</a>
+                    <h4>Quellen</h4>
+                    <a href="https://opendata.swiss/de/dataset/echtzeitdaten-am-abstimmungstag-zu-eidgenoessischen-abstimmungsvorlagen">
+                        Echtzeitdaten am Abstimmungstag zu eidgenössischen Abstimmungsvorlagen
+                    </a>
+                    <a
+                        href="https://opendata.swiss/de/dataset/echtzeitdaten-am-abstimmungstag-zu-kantonalen-abstimmungsvorlagen">
+                        Echtzeitdaten am Abstimmungstag zu kantonalen Abstimmungsvorlagen
+                    </a>
+                    <a href="https://opendata.swiss/de/dataset/geodaten-zu-den-eidgenoessischen-abstimmungsvorlagen">
+                        Geodaten zu den eidgenössischen Abstimmungsvorlagen
+                    </a>
+                    <a href="https://infoscience.epfl.ch/entities/publication/8b90ac8f-8433-4148-940b-0c07f2baec91">
+                        Sub-Matrix Factorization for Real-Time Vote Prediction <br> - Immer, Alexander and Kristof, Victor and Grossglauser, Matthias and Thiran, Patrick
+                    </a>
+
+                </div>
+            </div>
         </div>
     </footer>
-    
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
     <script type="text/javascript" src="https://unpkg.com/tabulator-tables@6.4.0/dist/js/tabulator.min.js"></script>
     <script src="//unpkg.com/alpinejs" defer></script>
 </body>
+
 </html>
