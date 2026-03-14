@@ -91,7 +91,7 @@ body>footer h3 a {
 }
 
 .map .wrapper {
-    min-height: 78vh;
+    min-height: calc(100vh - 80px);
     display: flex;
     flex-direction: column;
     padding-bottom: 3rem;
