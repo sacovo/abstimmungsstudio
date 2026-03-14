@@ -1,3 +1,21 @@
+:root {
+    --header-font: 'Bricolage Grotesque', sans-serif;
+    --body-font: 'Public Sans', sans-serif;
+    --background-color: #fbf5ed;
+    --highlight-color: #f0d962;
+    --black: #000000;
+}
+
+h1,
+h2,
+h3,
+h4 {
+    font-family: var(--header-font);
+    font-weight: bold;
+    margin-top: 0;
+    margin-bottom: 0.5em;
+}
+
 h1 {
     font-size: 2em;
 }
@@ -25,15 +43,58 @@ body {
     grid-template-columns: 1fr 1fr 300px;
     grid-template-rows: auto 1fr auto;
     min-height: 100vh;
+    background: var(--background-color);
+    font-family: var(--body-font);
+    font-optical-sizing: auto;
+    font-style: normal;
 }
 
 body>header {
     grid-area: header;
-    z-index: 10;
+    position: relative;
+    z-index: 1000;
+}
+
+nav {
+    background-color: var(--black);
+}
+
+nav i {
+    color: var(--highlight-color);
+}
+
+nav .brand-logo {
+    display: flex;
+    align-items: center;
+}
+
+.brand-logo i {
+    display: flex;
+    align-items: center;
+}
+
+.brand-logo h1 {
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0;
+}
+
+.nav-img {
+    width: 100%;
+    height: auto;
+    display: block;
+    margin-bottom: 1rem;
+}
+
+.sidenav-overlay {
+    z-index: 900;
+}
+
+.sidenav {
+    z-index: 1002;
 }
 
 aside {
-    background-color: #f5f5f5;
     padding: 1rem;
 }
 
@@ -73,7 +134,7 @@ body>footer a:visited {
 
 body>footer h3 a {
     text-decoration: none;
-    border-bottom: solid 1px #f0d962;
+    border-bottom: solid 1px var(--highlight-color);
 }
 
 .results-section {
@@ -87,7 +148,6 @@ body>footer h3 a {
 .map {
     display: flex;
     flex-direction: column;
-    background-color: white;
 }
 
 .map .wrapper {
@@ -176,7 +236,7 @@ body>footer h3 a {
     /* Slightly above the bar */
     height: 16px;
     width: 1px;
-    background-color: #000;
+    background-color: var(--black);
     z-index: 1;
 }
 
@@ -187,7 +247,7 @@ body>footer h3 a {
     margin: 15px 0 10px 0;
     border-radius: 4px;
     overflow: hidden;
-    background-color: #e0e0e0;
+    background-color: var(--background-color);
     position: relative;
 }
 
@@ -236,7 +296,6 @@ table.inside tr {
 }
 
 .map-layout {
-    background-color: #f5f5f5;
     margin-bottom: 0;
 }
 
@@ -253,4 +312,26 @@ table.inside tr {
     align-items: center;
     gap: 1rem;
     margin-top: 1rem;
+}
+
+.subtitle {
+    font-size: 12px;
+    font-family: var(--header-font);
+    position: absolute;
+    color: var(--highlight-color);
+    line-height: 1;
+    font-weight: bold;
+    rotate: -12deg;
+    text-shadow: var(--black) 3px 3px 2px;
+    right: -4px;
+    bottom: 3px;
+}
+
+.blue.lighten-3 {
+    background-color: #8dd4da !important;
+}
+
+.btn,
+.btn-floating {
+    background-color: #99cda9;
 }

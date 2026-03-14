@@ -1,9 +1,16 @@
+{% load static %}
 <div class="nav-wrapper" x-data="mainNav()">
     <a href="{% url 'abst:index' %}" class="brand-logo left" style="margin-left: 20px;">
-        <i class="material-symbols-outlined left">how_to_vote</i>Abstimmungsstudio
+        <i class="material-symbols-outlined left">how_to_vote</i>
+        <h1>Abstimmungsstudio</h1>
+        <span class="subtitle">by <br>digital/organizing</span>
+    </a>
+
+    <a href="#" data-target="main-nav-sidenav" class="sidenav-trigger right hide-on-large-only" x-ref="sidenavTrigger">
+        <i class="material-symbols-outlined">menu</i>
     </a>
     
-    <ul class="right">
+    <ul class="right hide-on-med-and-down">
         <li>
             <a href="{% url 'abst:vorlagen' %}">
                 <i class="material-symbols-outlined left">list</i>Alle Vorlagen
@@ -27,12 +34,33 @@
             </ul>
         </li>
     </ul>
+
+    <ul id="main-nav-sidenav" class="sidenav" x-ref="sidenav">
+        {% include 'abst/includes/nav_header.html' %}
+        <li>
+            <a href="{% url 'abst:vorlagen' %}">
+                <i class="material-symbols-outlined left">list</i>Alle Vorlagen
+            </a>
+        </li>
+        <li>
+            <div style="padding: 0 16px 8px 16px;">
+                <label for="mobile-tage-select">Abstimmungstage</label>
+                <select id="mobile-tage-select" class="browser-default" x-model="selectedTag" @change="goToSelectedTag">
+                    <option value="">Abstimmungstag wählen</option>
+                    <template x-for="tag in tage" :key="tag.date">
+                        <option :value="tag.date" x-text="formatDate(tag.date)"></option>
+                    </template>
+                </select>
+            </div>
+        </li>
+    </ul>
 </div>
 
 <script>
 document.addEventListener('alpine:init', () => {
     Alpine.data('mainNav', () => ({
         tage: [],
+        selectedTag: '',
         
         async init() {
             await this.fetchTage();
@@ -42,6 +70,9 @@ document.addEventListener('alpine:init', () => {
                         coverTrigger: false,
                         constrainWidth: false
                     });
+                }
+                if (this.$refs.sidenav) {
+                    M.Sidenav.init(this.$refs.sidenav);
                 }
             }, 0);
         },
@@ -60,6 +91,11 @@ document.addEventListener('alpine:init', () => {
             const parts = dateStr.split('-');
             if (parts.length !== 3) return dateStr;
             return `${parts[2]}.${parts[1]}.${parts[0]}`;
+        },
+
+        goToSelectedTag() {
+            if (!this.selectedTag) return;
+            window.location.href = `/${this.selectedTag}/`;
         }
     }));
 });

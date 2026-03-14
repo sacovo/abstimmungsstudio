@@ -1,9 +1,15 @@
 <div class="nav-wrapper" x-data="vorlageNav('{{ vorlage.tag.date|date:'Y-m-d' }}')">
     <a href="{% url 'abst:index' %}" class="brand-logo left" style="margin-left: 20px;">
-        <i class="material-symbols-outlined left">home</i>Abstimmungsstudio
+        <i class="material-symbols-outlined left">home</i>
+
+        <h1>Abstimmungsstudio</h1>
+    </a>
+
+    <a href="#" data-target="vorlage-nav-sidenav" class="sidenav-trigger right hide-on-large-only" x-ref="sidenavTrigger">
+        <i class="material-symbols-outlined">menu</i>
     </a>
     
-    <ul class="right">
+    <ul class="right hide-on-med-and-down">
         <li>
             <a href="{% url 'abst:abstimmungstag' vorlage.tag.date|date:'Y-m-d' %}">
                 <i class="material-symbols-outlined left">calendar_today</i>{{ vorlage.tag.date|date:"d.m.Y" }}
@@ -44,6 +50,37 @@
             </ul>
         </li>
     </ul>
+
+    <ul id="vorlage-nav-sidenav" class="sidenav" x-ref="sidenav">
+
+        {% include 'abst/includes/nav_header.html' %}
+        <li>
+            <a href="{% url 'abst:abstimmungstag' vorlage.tag.date|date:'Y-m-d' %}">
+                <i class="material-symbols-outlined left">calendar_today</i>{{ vorlage.tag.date|date:"d.m.Y" }}
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:vorlage_map' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">map</i>Karte
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:vorlage_table' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">table_chart</i>Tabelle
+            </a>
+        </li>
+        <li>
+            <div style="padding: 0 16px 8px 16px;">
+                <label for="mobile-vorlagen-select">Andere Vorlagen am {{ vorlage.tag.date|date:"d.m.Y" }}</label>
+                <select id="mobile-vorlagen-select" class="browser-default" x-model="selectedVorlage" @change="goToSelectedVorlage">
+                    <option value="">Vorlage wählen</option>
+                    <template x-for="v in vorlagen" :key="v.vorlagen_id">
+                        <option :value="v.vorlagen_id" x-text="v.name + ' (' + v.region + ')'" :title="v.name"></option>
+                    </template>
+                </select>
+            </div>
+        </li>
+    </ul>
 </div>
 
 <script>
@@ -52,14 +89,20 @@ document.addEventListener('alpine:init', () => {
         date: dateStr,
         search: '',
         vorlagen: [],
+        selectedVorlage: '',
         
         async init() {
             setTimeout(() => {
-                M.Dropdown.init(this.$refs.dropdownTrigger, {
-                    constrainWidth: false,
-                    coverTrigger: false,
-                    closeOnClick: false
-                });
+                if (this.$refs.dropdownTrigger) {
+                    M.Dropdown.init(this.$refs.dropdownTrigger, {
+                        constrainWidth: false,
+                        coverTrigger: false,
+                        closeOnClick: false
+                    });
+                }
+                if (this.$refs.sidenav) {
+                    M.Sidenav.init(this.$refs.sidenav);
+                }
             }, 0);
             
             await this.fetchVorlagen();
@@ -77,6 +120,12 @@ document.addEventListener('alpine:init', () => {
             } catch (err) {
                 console.error("Failed to load vorlagen", err);
             }
+        },
+
+        goToSelectedVorlage() {
+            if (!this.selectedVorlage) return;
+            const view = window.location.pathname.includes('table') ? 'table' : 'map';
+            window.location.href = `/${this.selectedVorlage}/${view}/`;
         }
     }));
 });

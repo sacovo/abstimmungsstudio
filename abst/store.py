@@ -51,8 +51,7 @@ def import_abst_kantonal_meta(
     for resource in data["result"]["resources"]:
         coverage_date = date.fromisoformat(resource["coverage"])
         url = resource["url"]
-        Abstimmungstag.objects.filter(
-            date=coverage_date).update(url_kantonal=url)
+        Abstimmungstag.objects.filter(date=coverage_date).update(url_kantonal=url)
 
 
 @contextmanager
@@ -162,8 +161,7 @@ def fetch_results_kantonal(
 
             vorlagen.append(
                 VorlageSchema(
-                    name=get_name(vorlage["vorlagenTitel"],
-                                  k.lang_code if k else "de"),
+                    name=get_name(vorlage["vorlagenTitel"], k.lang_code if k else "de"),
                     vorlagen_id=int(vorlage["vorlagenId"]),
                     has_zk=has_zk,
                     finished=vorlage["vorlageBeendet"],
@@ -288,13 +286,11 @@ def fetch_results_eidg(json_url) -> tuple[list[GemeindeResult], list[VorlageSche
                 finished=vorlage["vorlageBeendet"],
                 doppeltes_mehr=vorlage["doppeltesMehr"],
                 angenommen=vorlage["vorlageAngenommen"] or False,
-                ja_staende=(staende["jaStaendeGanz"] +
-                            0.5 * staende["jaStaendeHalb"])
+                ja_staende=(staende["jaStaendeGanz"] + 0.5 * staende["jaStaendeHalb"])
                 if staende["jaStaendeGanz"] is not None
                 else 0,
                 nein_staende=(
-                    staende["neinStaendeGanz"] + 0.5 *
-                    staende["neinStaendeHalb"]
+                    staende["neinStaendeGanz"] + 0.5 * staende["neinStaendeHalb"]
                 )
                 if staende["neinStaendeGanz"] is not None
                 else 0,
@@ -587,8 +583,7 @@ def get_vorlagen_table(vorlagen_ids: list[int]):
     if not vorlagen_ids:
         return pl.DataFrame()
 
-    id_filters = " or ".join(
-        [f'r.vorlage_id == "{v_id}"' for v_id in vorlagen_ids])
+    id_filters = " or ".join([f'r.vorlage_id == "{v_id}"' for v_id in vorlagen_ids])
 
     with get_influx_client(timeout=600000) as client:
         query_api = client.query_api()

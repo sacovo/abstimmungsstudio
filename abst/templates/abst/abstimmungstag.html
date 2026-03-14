@@ -17,17 +17,17 @@
 
     <!-- Region Filter Buttons -->
     <div class="row abst-filter-row" x-show="Object.keys(votesByRegion).length > 1">
-        <div class="col s10">
+        <div class="col l8 m7 s12">
             <template x-for="region in Object.keys(votesByRegion)" :key="region">
                 <button class="btn waves-effect waves-light"
                     :class="selectedRegion === region ? 'blue darken-2' : 'blue lighten-3'"
-                    style="margin: 0 10px 10px 0; border-radius: 20px;" @click="toggleRegion(region)" x-text="region">
+                    style="margin: 0 10px 10px 0; " @click="toggleRegion(region)" x-text="region">
                 </button>
             </template>
         </div>
-        <div class="col s2 right-align">
-            <button class="btn waves-effect waves-light grey lighten-1"
-                style="margin: 0 10px 10px 0; border-radius: 20px;" @click="fetchVotes()">
+        <div class="col l4 m5 s12 right-align">
+            <button class="btn waves-effect "
+                style="margin: 0 10px 10px 0;" @click="fetchVotes()">
                 <i class="material-symbols-outlined left">refresh</i>
                 Aktualisieren
             </button>
