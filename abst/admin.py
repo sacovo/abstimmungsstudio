@@ -5,8 +5,8 @@ from unfold.admin import ModelAdmin
 from unfold.decorators import action
 
 from abst.geo import import_from_geojson
-from abst.models import GeoStand, Gemeinde, Zaehlkreis, Abstimmungstag, Kanton, Vorlage
-from abst.store import fetch_results_eidg, fetch_results_kantonal, store_results, store_vorlagen
+from abst.models import Abstimmungstag, Gemeinde, GeoStand, Kanton, Vorlage, Zaehlkreis
+from abst.store import fetch_and_store_eidg, fetch_and_store_kantonal
 
 
 @admin.register(GeoStand)
@@ -26,16 +26,20 @@ class GeoStandAdmin(ModelAdmin):
             import_from_geojson(stand)
         return redirect(reverse_lazy("admin:abst_geostand_change", args=[object_id]))
 
-    @action(
-        description="Kantone"
-    )
+    @action(description="Kantone")
     def create_kantone(self, request, object_id):
         stand = self.get_object(request, object_id)
-        kantone = stand.gemeinde_set.values_list(
-            "kanton", "kanton_id").distinct().order_by("kanton_id").iterator()
+        kantone = (
+            stand.gemeinde_set.values_list("kanton", "kanton_id")
+            .distinct()
+            .order_by("kanton_id")
+            .iterator()
+        )
         for kanton in kantone:
-            Kanton.objects.get_or_create(kanton_id=kanton[1], defaults={
-                "name": kanton[0], "short": kanton[0][:2].upper()})
+            Kanton.objects.get_or_create(
+                kanton_id=kanton[1],
+                defaults={"name": kanton[0], "short": kanton[0][:2].upper()},
+            )
 
         return redirect(reverse_lazy("admin:abst_geostand_change", args=[object_id]))
 
@@ -69,11 +73,11 @@ class AbstimmungstagAdmin(ModelAdmin):
         obj = self.get_object(request, object_id)
         if not obj:
             return redirect(reverse_lazy("admin:abst_abstimmungstag_changelist"))
-        gemeinden, vorlagen = fetch_results_eidg(obj.url_eidg)
-        store_vorlagen(vorlagen, obj)
-        store_results(gemeinden)
+        fetch_and_store_eidg(obj)
 
-        return redirect(reverse_lazy("admin:abst_abstimmungstag_change", args=[object_id]))
+        return redirect(
+            reverse_lazy("admin:abst_abstimmungstag_change", args=[object_id])
+        )
 
     @action(
         description="Kantonal",
@@ -82,11 +86,10 @@ class AbstimmungstagAdmin(ModelAdmin):
         obj = self.get_object(request, object_id)
         if not obj or not obj.url_kantonal:
             return redirect(reverse_lazy("admin:abst_abstimmungstag_changelist"))
-        gemeinden, vorlagen = fetch_results_kantonal(obj.url_kantonal)
-        store_vorlagen(vorlagen, obj)
-        store_results(gemeinden)
-
-        return redirect(reverse_lazy("admin:abst_abstimmungstag_change", args=[object_id]))
+        fetch_and_store_kantonal(obj)
+        return redirect(
+            reverse_lazy("admin:abst_abstimmungstag_change", args=[object_id])
+        )
 
 
 @admin.register(Vorlage)

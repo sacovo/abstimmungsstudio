@@ -1,5 +1,3 @@
-from typing import Any
-
 from django.db import models
 
 # Create your models here.
@@ -22,9 +20,7 @@ class Gemeinde(models.Model):
     kanton = models.CharField(max_length=255)
     kanton_id = models.IntegerField()
 
-    stand = models.ForeignKey(
-        GeoStand, on_delete=models.CASCADE
-    )
+    stand = models.ForeignKey(GeoStand, on_delete=models.CASCADE)
 
     def __str__(self):
         return self.name
@@ -53,16 +49,10 @@ class Abstimmungstag(models.Model):
     url_eidg = models.URLField(blank=True, null=True)
     url_kantonal = models.URLField(blank=True, null=True)
 
-    stand = models.ForeignKey(
-        GeoStand, on_delete=models.CASCADE
-    )
+    stand = models.ForeignKey(GeoStand, on_delete=models.CASCADE)
 
-    projection = models.FileField(
-        upload_to="projections/", blank=True, null=True
-    )
-    projection_bet = models.FileField(
-        upload_to="projections/", blank=True, null=True
-    )
+    projection = models.FileField(upload_to="projections/", blank=True, null=True)
+    projection_bet = models.FileField(upload_to="projections/", blank=True, null=True)
 
     def __str__(self):
         return f"{self.name} ({self.date})"
@@ -83,15 +73,20 @@ class Vorlage(models.Model):
     result = models.JSONField(blank=True, null=True)
 
     kantonal = models.BooleanField(default=False)
+    has_zk = models.BooleanField(default=False)
 
     region = models.CharField(max_length=255, blank=True, null=True)
 
     related = models.ManyToManyField("self", blank=True)
     tag = models.ForeignKey(
-        Abstimmungstag, on_delete=models.CASCADE, related_name="vorlagen")
+        Abstimmungstag, on_delete=models.CASCADE, related_name="vorlagen"
+    )
 
     def __str__(self):
         return self.name
+
+    class Meta:
+        ordering = ["-vorlagen_id"]
 
 
 class Kanton(models.Model):

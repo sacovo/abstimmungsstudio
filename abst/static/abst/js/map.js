@@ -15,7 +15,11 @@ document.addEventListener('alpine:init', () => {
         width: 0,
         height: 0,
         selectedFeatureId: null,
+        selectedCantonId: null,
         selectedFeatureType: null,
+        _zoomCantonHandler: null,
+
+
 
         async init() {
             // Materalize Select init
@@ -56,6 +60,98 @@ document.addEventListener('alpine:init', () => {
                 console.error("Error loading data:", err);
                 this.loading = false;
             });
+
+            this._zoomCantonHandler = (e) => this.zoomToCanton(e.detail);
+            window.addEventListener('map:zoom-canton', this._zoomCantonHandler);
+        },
+
+        getCantonFeatures() {
+
+            const objects = this.geoData.objects || {};
+            let kantKey = Object.keys(objects).find(k => k.startsWith('k4kant'));
+            // Passe diese Felder an deine bestehende Struktur an:
+            return kantKey ? topojson.feature(this.geoData, objects[kantKey]).features : [];
+        },
+
+        findCantonFeature(ref) {
+            const feats = this.getCantonFeatures();
+            if (!feats.length) return null;
+            return feats.find(f => {
+                return f.properties && +f.properties.kantId === +ref.id
+            });
+        },
+
+        zoomToCanton(ref) {
+            if (!this.svg || !this.path || !this.zoom) return;
+            const feature = this.findCantonFeature(ref);
+            if (this.selectedFeatureId === ref.id && this.selectedFeatureType === 'canton') {
+                return this.resetZoom();
+            }
+            this.selectedFeatureId = ref.id;
+            this.selectedCantonId = ref.id;
+            this.selectedFeatureType = 'canton';
+
+            if (!feature) return;
+
+            const [[x0, y0], [x1, y1]] = this.path.bounds(feature);
+            const width = this.width || document.getElementById('map-container')?.clientWidth || 800;
+            const height = this.height || document.getElementById('map-container')?.clientHeight || 600;
+
+            const dx = x1 - x0;
+            const dy = y1 - y0;
+            const x = (x0 + x1) / 2;
+            const y = (y0 + y1) / 2;
+
+            const scale = Math.max(1, Math.min(10, 0.9 / Math.max(dx / width, dy / height)));
+            const transform = d3.zoomIdentity
+                .translate(width / 2, height / 2)
+                .scale(scale)
+                .translate(-x, -y);
+
+            this.svg.transition().duration(650).call(this.zoom.transform, transform);
+            this.updateMap();
+        },
+
+
+
+        async fetchNewResults() {
+            this.loading = true;
+            try {
+                const resultsData = await fetch(`/api/abst/${this.vorlageId}/gemeinden`).then(res => res.json());
+
+                // Update results map
+                resultsData.forEach(r => {
+                    this.results[r.geo_id] = r;
+                });
+
+                // Update kantone results (if needed, although user asked for gemeinden endpoint only,
+                // you might have discrepancies if UI tries to show kantone results, but we'll stick to instructions)
+                const cantonsData = await fetch(`/api/abst/${this.vorlageId}/kantone`).then(res => res.json());
+                cantonsData.forEach(r => {
+                    const kantIdStr = String(r.kanton);
+                    if (!this.cantonResults[kantIdStr]) {
+                        this.cantonResults[kantIdStr] = [];
+                    }
+                    // Replace existing entry for the same vote if exists
+                    const existingIndex = this.cantonResults[kantIdStr].findIndex(e => e.id === r.id);
+                    if (existingIndex >= 0) {
+                        this.cantonResults[kantIdStr][existingIndex] = r;
+                    } else {
+                        this.cantonResults[kantIdStr].push(r);
+                    }
+                });
+
+                this.updateMap();
+                window.dispatchEvent(new CustomEvent('results-updated'));
+            } catch (err) {
+                console.error("Error fetching new results:", err);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        toggleCantons() {
+            this.updateMap();
         },
 
         renderMap() {
@@ -71,6 +167,7 @@ document.addEventListener('alpine:init', () => {
 
             this.svg = d3.select("#swiss-map")
                 .attr("viewBox", [0, 0, this.width, this.height])
+                .attr("shape-rendering", "geometricPrecision")
                 .call(this.zoom)
                 .on("click", () => this.resetZoom());
 
@@ -89,19 +186,22 @@ document.addEventListener('alpine:init', () => {
 
             let features = [];
 
+            const zaehlkreisId = topojson.feature(this.geoData, objects[zaehlKey]).features[0].properties.id
+            console.log(zaehlkreisId)
+
             const isKantonal = Object.keys(this.cantonResults).length === 1;
 
             // Filter out Zürich (vogeId=261) and Winterthur (vogeId=230) from the main gemeinden list
             // as they are represented by their separate Zählkreise instead (only for national votes)
             let vogeFeatures = topojson.feature(this.geoData, objects[vogeKey]).features.filter(f => {
                 const id = f.properties ? (f.properties.vogeId || f.properties.id || f.id) : f.id;
-                if (isKantonal) return true; // keep them in kantonal votes
+                if (!this.results[zaehlkreisId]) return true; // keep them in kantonal votes
                 return id !== 261 && id !== 230;
             });
 
             features = features.concat(vogeFeatures);
 
-            if (!isKantonal) {
+            if (this.results[zaehlkreisId]) {
                 console.log("Adding Zählkreise for Zürich and Winterthur");
                 console.log(zaehlKey)
                 console.log(objects[zaehlKey]);
@@ -164,7 +264,7 @@ document.addEventListener('alpine:init', () => {
                 .attr("d", this.path)
                 .attr("stroke", "#000")
                 .attr("stroke-width", 0.8)
-                .style("display", "none") // hidden by default
+                .style("display", "block") // hidden by default
                 .on("click", (e, d) => this.clicked(e, d, 'canton'))
                 .append("title")
                 .text(d => {
@@ -220,8 +320,8 @@ document.addEventListener('alpine:init', () => {
                     .join("path")
                     .attr("class", "lake")
                     .attr("d", this.path)
-                    .attr("fill", "#cce6ff") // Light blue for lakes
-                    .attr("stroke", "#fff")
+                    .attr("fill", "#add8e6") // Light blue for lakes
+                    .attr("stroke", "#000000")
                     .attr("stroke-width", 0.5);
             }
 
@@ -236,7 +336,6 @@ document.addEventListener('alpine:init', () => {
                     .attr("pointer-events", "none");
             }
 
-            this.updateVisibility();
             this.updateMap();
         },
 
@@ -245,16 +344,14 @@ document.addEventListener('alpine:init', () => {
 
             // ja: red (0) to blue (100)
             const jaColorScale = d3.scaleLinear()
-                .domain([0, 50, 100])
-                .range(["#d73027", "#fdfdfd", "#4575b4"]);
+                .domain([20, 50, 80])
+                .range(["#e53935", "#ffffff", "#0b12cd"]);
 
             // beteiligung: coolor range
             const betColorScale = d3.scaleSequential(d3.interpolateBlues)
                 .domain([0, 100]);
 
             this.g.selectAll(".area")
-                .transition()
-                .duration(500)
                 .attr("fill", d => {
                     const id = d.properties ? (d.properties.id || d.properties.vogeId || d.id) : d.id;
                     const res = this.results[id];
@@ -292,7 +389,6 @@ document.addEventListener('alpine:init', () => {
 
             this.g.selectAll(".canton")
                 .transition()
-                .duration(500)
                 .attr("fill", d => {
                     const kantonCode = d.properties && d.properties.kantId ? String(d.properties.kantId) : String(d.id);
                     const resList = this.cantonResults[kantonCode] || [];
@@ -328,12 +424,22 @@ document.addEventListener('alpine:init', () => {
 
                     return color;
                 })
+                .attr("pointer-events", d => {
+                    if (this.selectedCantonId == String(d.properties.kantId)) {
+                        return "none"; // disable pointer events for the selected canton to prevent clicking it when zoomed in
+                    }
+                    if (!this.showCantons) {
+                        return "none"; // disable pointer events for cantons when they are not shown to prevent interaction
+                    }
+                    return "auto";
+                })
                 .attr("fill-opacity", d => {
                     const kantonCode = d.properties && d.properties.kantId ? String(d.properties.kantId) : String(d.id);
-                    if (this.selectedFeatureType === 'canton') {
-                        if (String(this.selectedFeatureId) === kantonCode) {
-                            return 0; // transparent
-                        }
+                    if (+this.selectedCantonId === +kantonCode) {
+                        return 0; // transparent
+                    }
+                    if (!this.showCantons) {
+                        return 0; // hide cantons when not shown
                     }
 
                     const resList = this.cantonResults[kantonCode] || [];
@@ -359,31 +465,20 @@ document.addEventListener('alpine:init', () => {
                 });
         },
 
-        toggleCantons() {
-            this.updateVisibility();
-        },
 
-        updateVisibility() {
-            if (this.showCantons) {
-                this.g.selectAll(".canton").style("display", "block");
-                if (this.selectedFeatureType === 'canton') {
-                    // Show areas to make them visible through the selected transparent canton
-                    this.g.selectAll(".area").style("display", "block");
-                } else {
-                    this.g.selectAll(".area").style("display", "none");
-                }
-            } else {
-                this.g.selectAll(".area").style("display", "block");
-                this.g.selectAll(".canton").style("display", "none");
-            }
-        },
 
         clicked(event, d, type) {
             const id = d.properties ? (d.properties.id || d.properties.vogeId || d.properties.kantId || d.id) : d.id;
             this.selectedFeatureId = id;
+            if (type === 'canton') {
+                this.selectedCantonId = id;
+            }
             this.selectedFeatureType = type;
 
             const [[x0, y0], [x1, y1]] = this.path.bounds(d);
+            this.g.selectAll(".area, .canton").interrupt();
+
+
             event.stopPropagation();
             this.svg.transition().duration(750).call(
                 this.zoom.transform,
@@ -393,12 +488,22 @@ document.addEventListener('alpine:init', () => {
                     .translate(-(x0 + x1) / 2, -(y0 + y1) / 2),
                 d3.pointer(event, this.svg.node())
             );
-            this.updateVisibility();
             this.updateMap();
+
+            let res = null;
+            let name = d.properties ? (d.properties.name || d.properties.vogeName || d.properties.kantName || id) : id;
+            if (type === 'area') {
+                res = this.results[id];
+            }
+
+            window.dispatchEvent(new CustomEvent('gemeinde-selected', {
+                detail: { id: id, name: name, type: type, result: res }
+            }));
         },
 
         resetZoom() {
             this.selectedFeatureId = null;
+            this.selectedCantonId = null;
             this.selectedFeatureType = null;
             if (this.svg && this.zoom) {
                 this.svg.transition().duration(750).call(
@@ -406,8 +511,11 @@ document.addEventListener('alpine:init', () => {
                     d3.zoomIdentity
                 );
             }
-            this.updateVisibility();
             this.updateMap();
+
+            window.dispatchEvent(new CustomEvent('gemeinde-selected', {
+                detail: null
+            }));
         }
     }));
 });

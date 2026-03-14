@@ -1,5 +1,6 @@
-import requests
 from datetime import date
+
+import requests
 from django.core.files.base import ContentFile
 from django.db import transaction
 
@@ -11,8 +12,7 @@ def import_geo_meta(url):
     for resource in data["result"]["resources"]:
         coverage_date = date.fromisoformat(resource["coverage"])
         url = resource["url"]
-        GeoStand.objects.get_or_create(
-            date=coverage_date, defaults={"url": url})
+        GeoStand.objects.get_or_create(date=coverage_date, defaults={"url": url})
 
 
 def import_from_geojson(stand: GeoStand):
@@ -28,7 +28,8 @@ def import_from_geojson(stand: GeoStand):
 def fetch_geojson_eidg(stand: GeoStand) -> tuple[list[Gemeinde], list[Zaehlkreis]]:
     data = requests.get(stand.url)
     stand.document.save(
-        f"geostand_{stand.date}.json", ContentFile(data.content), save=True)
+        f"geostand_{stand.date}.json", ContentFile(data.content), save=True
+    )
 
     data = data.json()
 
@@ -44,9 +45,8 @@ def fetch_geojson_eidg(stand: GeoStand) -> tuple[list[Gemeinde], list[Zaehlkreis
 
     for feature in objects[voge_key]["geometries"]:
         properties = feature["properties"]
-        if 'id' in properties:
-            db_gemeinde = Gemeinde.objects.filter(
-                geo_id=int(properties["id"])).first()
+        if "id" in properties:
+            db_gemeinde = Gemeinde.objects.filter(geo_id=int(properties["id"])).first()
             if not db_gemeinde:
                 continue
             gemeinden[properties["id"]] = Gemeinde(
@@ -58,14 +58,12 @@ def fetch_geojson_eidg(stand: GeoStand) -> tuple[list[Gemeinde], list[Zaehlkreis
             )
             continue
 
-        gemeinden[int(properties["vogeId"])] = (
-            Gemeinde(
-                name=properties["vogeName"],
-                geo_id=int(properties["vogeId"]),
-                kanton=properties["kantName"],
-                kanton_id=int(properties["kantId"]),
-                stand=stand,
-            )
+        gemeinden[int(properties["vogeId"])] = Gemeinde(
+            name=properties["vogeName"],
+            geo_id=int(properties["vogeId"]),
+            kanton=properties["kantName"],
+            kanton_id=int(properties["kantId"]),
+            stand=stand,
         )
 
     if zaehlkreis_key is not None:
@@ -85,20 +83,12 @@ def fetch_geojson_eidg(stand: GeoStand) -> tuple[list[Gemeinde], list[Zaehlkreis
 def get_geo_id_list(stand: GeoStand, kanton_id: int | None = None) -> list[int]:
     ids = []
     gemeinden = Gemeinde.objects.filter(stand=stand)
+    kreise = Zaehlkreis.objects.filter(gemeinde__stand=stand)
     if kanton_id is not None:
         gemeinden = gemeinden.filter(kanton_id=kanton_id)
+        kreise = kreise.filter(gemeinde__kanton_id=kanton_id)
 
     ids = list(gemeinden.order_by("geo_id").values_list("geo_id", flat=True))
 
-    remove_ids = set()
-
-    # For kantonal level the zaehlkreise are not used
-    if kanton_id is not None:
-        return ids
-
-    kreise = Zaehlkreis.objects.filter(gemeinde__stand=stand)
     ids.extend(list(kreise.order_by("geo_id").values_list("geo_id", flat=True)))
-    remove_ids = set(kreise.values_list("gemeinde__geo_id", flat=True))
-
-    ids = [id for id in ids if id not in remove_ids]
     return ids

@@ -1,0 +1,83 @@
+<div class="nav-wrapper" x-data="vorlageNav('{{ vorlage.tag.date|date:'Y-m-d' }}')">
+    <a href="{% url 'abst:index' %}" class="brand-logo left" style="margin-left: 20px;">
+        <i class="material-symbols-outlined left">home</i>Abstimmungsstudio
+    </a>
+    
+    <ul class="right">
+        <li>
+            <a href="{% url 'abst:abstimmungstag' vorlage.tag.date|date:'Y-m-d' %}">
+                <i class="material-symbols-outlined left">calendar_today</i>{{ vorlage.tag.date|date:"d.m.Y" }}
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:vorlage_map' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">map</i>Karte
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:vorlage_table' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">table_chart</i>Tabelle
+            </a>
+        </li>
+        
+        <!-- Search Dropdown -->
+        <li>
+            <a class="dropdown-trigger" href="#!" data-target="vorlagen-dropdown" x-ref="dropdownTrigger">
+                <i class="material-symbols-outlined left">arrow_drop_down</i>Andere Vorlagen am {{ vorlage.tag.date|date:"d.m.Y" }}
+            </a>
+            <ul id="vorlagen-dropdown" class="dropdown-content" style="width: 400px !important;">
+                <li style="padding: 10px;">
+                    <div class="input-field" style="margin: 0; padding: 0;">
+                        <input type="text" placeholder="Suchen..." x-model="search" @input.debounce="fetchVorlagen" style="margin: 0;">
+                    </div>
+                </li>
+                <template x-for="v in vorlagen" :key="v.vorlagen_id">
+                    <li>
+                        <a :href="'/' + v.vorlagen_id + '/' + ((window.location.pathname.includes('table')) ? 'table/' : 'map/')" class="black-text truncate" :title="v.name">
+                            <span x-text="v.name.slice(0, 50) + (v.name.length > 50 ? '...' : '') + ' (' + v.region + ')'"></span>
+                        </a>
+                    </li>
+                </template>
+                <li x-show="vorlagen.length === 0">
+                    <a href="#!" class="grey-text">Keine Vorlagen gefunden.</a>
+                </li>
+            </ul>
+        </li>
+    </ul>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('vorlageNav', (dateStr) => ({
+        date: dateStr,
+        search: '',
+        vorlagen: [],
+        
+        async init() {
+            setTimeout(() => {
+                M.Dropdown.init(this.$refs.dropdownTrigger, {
+                    constrainWidth: false,
+                    coverTrigger: false,
+                    closeOnClick: false
+                });
+            }, 0);
+            
+            await this.fetchVorlagen();
+        },
+        
+        async fetchVorlagen() {
+            try {
+                let url = `/api/abst/vorlagen?date=${this.date}`;
+                if (this.search) {
+                    url += `&name=${encodeURIComponent(this.search)}`;
+                }
+                const res = await fetch(url);
+                const data = await res.json();
+                this.vorlagen = data.items || [];
+            } catch (err) {
+                console.error("Failed to load vorlagen", err);
+            }
+        }
+    }));
+});
+</script>

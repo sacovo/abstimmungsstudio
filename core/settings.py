@@ -10,14 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
-from celery.schedules import crontab
 import re
 from pathlib import Path
 
 import kombu
-
 import sentry_sdk
-
+from celery.schedules import crontab
 from environ import Env
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -45,6 +43,7 @@ DEBUG = env.bool("DEBUG", default=True)
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
 
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
 # Application definition
 
@@ -142,7 +141,6 @@ STORAGES = {
             "addressing_style": "auto",
         },
     },
-
     "staticfiles": {
         "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
     },
@@ -277,8 +275,15 @@ INFLUX_ORG = env.str("INFLUX_ORG", default="")
 INFLUX_BUCKET = env.str("INFLUX_BUCKET", default="")
 
 CELERY_BEAT_SCHEDULE = {
-    'fetch-active-votes-every-minute': {
-        'task': 'abst.tasks.fetch_active_votes',
-        'schedule': crontab(minute='*/1'),
+    "fetch-active-votes-every-minute": {
+        "task": "abst.tasks.fetch_active_votes",
+        "schedule": crontab(minute="*/1"),
+    },
+    "update-metadata-daily": {
+        "task": "abst.tasks.update_metadata",
+        "schedule": crontab(hour="5"),
     },
 }
+
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")

@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("abst", "0006_gemeinde_kanton_id_kanton_kanton_id"),
     ]

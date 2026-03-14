@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("abst", "0008_abstimmungstag_projection_bet"),
     ]

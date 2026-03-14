@@ -1,11 +1,17 @@
 {% extends "abst/base.html" %}
 {% load static %}
+
+{% block title %}Vorlagen{% endblock %}
+
+{% block nav %}
+{% include 'abst/includes/main_nav.html' %}
+{% endblock %}
+
 {% block content %}
-<div class="container" x-data="vorlagenView()" x-init="init()" style="margin-top: 2rem;">
-    <h4>Abstimmungsvorlagen</h4>
+<article x-data="vorlagenView()" x-init="init()" style="margin-top: 2rem;">
 
     <div id="vorlagen-table"></div>
-</div>
+</article>
 
 <script src="{% static 'abst/js/index.js' %}"></script>
 {% endblock %}

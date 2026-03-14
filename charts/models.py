@@ -35,7 +35,8 @@ class Chart(models.Model):
     published = models.BooleanField(default=False)
 
     collection = models.ForeignKey(
-        Collection, on_delete=models.CASCADE, related_name="charts")
+        Collection, on_delete=models.CASCADE, related_name="charts"
+    )
 
     def __str__(self):
         return self.name

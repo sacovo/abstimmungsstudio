@@ -1,7 +1,9 @@
+import datetime
 from typing import Literal
 
-from ninja.schema import Schema
+from ninja import Field
 from ninja.orm import ModelSchema
+from ninja.schema import Schema
 
 from abst.models import Abstimmungstag, Gemeinde, Kanton, Vorlage
 
@@ -58,6 +60,8 @@ class VorlageSchema(Schema):
 
     ja_staende: float
     nein_staende: float
+
+    has_zk: bool
     kantonal: bool = False
     region: str = "CH"
 
@@ -67,8 +71,19 @@ class VorlageSchema(Schema):
 class VorlageListingSchema(ModelSchema):
     class Meta:
         model = Vorlage
-        fields = ["name", "vorlagen_id", "finished", "doppeltes_mehr",
-                  "angenommen", "ja_staende", "nein_staende", "region", "result"]
+        fields = [
+            "name",
+            "vorlagen_id",
+            "finished",
+            "doppeltes_mehr",
+            "angenommen",
+            "ja_staende",
+            "nein_staende",
+            "region",
+            "result",
+        ]
+
+    date: datetime.datetime = Field(..., alias="tag.date")
 
 
 class ResultsKantonSchema(Schema):

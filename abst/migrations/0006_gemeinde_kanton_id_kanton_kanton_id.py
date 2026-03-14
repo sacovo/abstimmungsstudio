@@ -4,7 +4,6 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         ("abst", "0005_alter_zaehlkreis_unique_together"),
     ]

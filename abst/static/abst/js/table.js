@@ -1,13 +1,15 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('gemeindenTableView', (vorlageId) => ({
         vorlageId: vorlageId,
-        search: '',
         statusFilter: '',
         table: null,
         refreshInterval: null,
         gemeindenMap: {},
+        initialized: false,
 
         async init() {
+            if (this.initialized) return;
+            this.initialized = true;
 
             setTimeout(() => {
                 const elems = document.querySelectorAll('select');
@@ -47,7 +49,7 @@ document.addEventListener('alpine:init', () => {
                 pagination: true,
                 paginationSize: 50,
                 columns: [
-                    { title: "Geo ID", field: "geo_id", width: 100 },
+                    { title: "Geo ID", field: "geo_id", width: 100, headerFilter: "input", headerFilterPlaceholder: "Suchen..." },
                     { title: "Kanton", field: "kanton", width: 150, headerFilter: "input", headerFilterPlaceholder: "Suchen..." },
                     { title: "Gemeinde", field: "name", width: 250, headerFilter: "input", headerFilterPlaceholder: "Suchen..." },
                     {
@@ -112,6 +114,7 @@ document.addEventListener('alpine:init', () => {
         },
 
         async loadData() {
+
             try {
                 const response = await fetch(`/api/abst/${this.vorlageId}/gemeinden`);
                 const data = await response.json();
@@ -139,15 +142,6 @@ document.addEventListener('alpine:init', () => {
 
         updateFilter() {
             let filters = [];
-
-            if (this.search) {
-                // If a search is typed, try to match geo_id, name, or kanton (OR condition in Tabulator requires arrays of filters)
-                filters.push([
-                    { field: "geo_id", type: "like", value: this.search },
-                    { field: "name", type: "like", value: this.search },
-                    { field: "kanton", type: "like", value: this.search }
-                ]);
-            }
 
             if (this.statusFilter) {
                 filters.push({ field: "status", type: "=", value: this.statusFilter });

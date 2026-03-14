@@ -1,0 +1,26 @@
+{% extends 'abst/base.html' %}
+{% load static %}
+
+{% block content %}
+<article>
+    <h4>Vergleich: {{ vorlage.name }} vs {{ other.name }}</h4>
+    
+    <div x-data="gemeindenCompareView('{{ vorlage.vorlagen_id }}', '{{ other.vorlagen_id }}')" x-init="init()">
+        <div class="row">
+            <div class="input-field col s12 m8">
+                <input type="text" id="searchInput" x-model="search" @input="updateFilter">
+                <label for="searchInput">Suche nach ID, Name oder Kanton</label>
+            </div>
+            <div class="col s12 m4 right-align" style="margin-top: 20px;">
+                <button class="btn waves-effect waves-light" @click="loadData()">
+                    <i class="material-symbols-outlined left">refresh</i>Aktualisieren
+                </button>
+            </div>
+        </div>
+
+        <div id="compare-table"></div>
+    </div>
+</article>
+
+<script src="{% static 'abst/js/compare.js' %}"></script>
+{% endblock %}

@@ -1,8 +1,22 @@
 document.addEventListener('alpine:init', () => {
     Alpine.data('vorlagenView', () => ({
         table: null,
+        dates: { "": "Alle" }, // default empty option to reset
 
-        init() {
+        async init() {
+            try {
+                const response = await fetch('/api/abst/tage/');
+                if (response.ok) {
+                    const data = await response.json();
+                    data.forEach(item => {
+                        let d = new Date(item.date);
+                        this.dates[item.date.split("T")[0]] = d.toLocaleDateString("de-CH");
+                    });
+                }
+            } catch (error) {
+                console.error("Error loading dates:", error);
+            }
+
             this.table = new Tabulator("#vorlagen-table", {
                 ajaxURL: "/api/abst/vorlagen",
                 pagination: true,
@@ -11,13 +25,6 @@ document.addEventListener('alpine:init', () => {
                 paginationSize: 50,
                 sortMode: "remote",
                 ajaxURLGenerator: (url, config, params) => {
-                    // filter [
-                    //   {
-                    //     "field": "region",
-                    //     "type": "like",
-                    //     "value": "ZH"
-                    //   }
-                    // ]
                     console.log("Generating URL with params:", params);
                     const offset = ((params.page || 1) - 1) * (params.size || 50);
                     const limit = params.size || 50;
@@ -51,7 +58,27 @@ document.addEventListener('alpine:init', () => {
                 },
                 layout: "fitColumns",
                 columns: [
-                    { title: "ID", field: "vorlagen_id", width: 80 },
+                    {
+                        title: "Datum",
+                        field: "date",
+                        width: 130,
+                        headerFilter: "list",
+                        headerFilterParams: {
+                            values: this.dates,
+                            clearable: true,
+                        },
+
+                        hozAlign: "right",
+                        headerFilterPlaceholder: "Alle Daten",
+                        formatter: function (cell) {
+                            let val = cell.getValue();
+                            if (val) {
+                                let date = new Date(val);
+                                return date.toLocaleDateString("de-CH");
+                            }
+                            return "";
+                        }
+                    },
                     {
                         title: "Name",
                         field: "name",
@@ -91,6 +118,8 @@ document.addEventListener('alpine:init', () => {
                     },
                     {
                         title: "Beteiligung %",
+
+                        field: "result.stimmbeteiligungInProzent",
                         width: 140,
                         hozAlign: "right",
                         formatter: function (cell) {

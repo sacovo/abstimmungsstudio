@@ -1,0 +1,115 @@
+{% extends 'abst/base.html' %}
+{% load static %}
+
+{% block nav %}
+{% include 'abst/includes/main_nav.html' %}
+{% endblock %}
+
+{% block title %}
+{{ tag.date|date:'d.m.Y' }}
+{% endblock %}
+
+{% block content %}
+<article x-data="abstimmungstagView('{{ tag.date|date:'Y-m-d' }}')">
+    <div class="row abst-header-row"></div>
+    <h2 class="abst-header-title">Abstimmungstag {{ tag.date|date:'d.m.Y' }}</h2>
+    </div>
+
+    <!-- Region Filter Buttons -->
+    <div class="row abst-filter-row" x-show="Object.keys(votesByRegion).length > 1">
+        <div class="col s10">
+            <template x-for="region in Object.keys(votesByRegion)" :key="region">
+                <button class="btn waves-effect waves-light"
+                    :class="selectedRegion === region ? 'blue darken-2' : 'blue lighten-3'"
+                    style="margin: 0 10px 10px 0; border-radius: 20px;" @click="toggleRegion(region)" x-text="region">
+                </button>
+            </template>
+        </div>
+        <div class="col s2 right-align">
+            <button class="btn waves-effect waves-light grey lighten-1"
+                style="margin: 0 10px 10px 0; border-radius: 20px;" @click="fetchVotes()">
+                <i class="material-symbols-outlined left">refresh</i>
+                Aktualisieren
+            </button>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div x-show="loading && Object.keys(votesByRegion).length === 0" class="progress">
+        <div class="indeterminate"></div>
+    </div>
+
+    <template x-for="(votes, region) in votesByRegion" :key="region">
+        <div class="region-section card abst-region-card" x-show="!selectedRegion || selectedRegion === region">
+            <h4 class="abst-region-title" x-text="region === 'CH' ? 'National' : 'Kanton ' + region"></h4>
+
+            <div class="row">
+                <template x-for="vote in votes" :key="vote.vorlagen_id">
+                    <div class="col s12 m6 l4">
+                        <div class="card hoverable">
+                            <div class="card-content">
+                                <span class="card-title abst-vote-card-title" :title="vote.name"
+                                    x-text="vote.name"></span>
+
+                                <div class="abst-vote-results">
+                                    <template x-if="vote.result">
+                                        <div>
+
+                                            <!-- Result Bar -->
+                                            <div class="result-bar-container">
+                                                <div class="result-bar-50-marker"></div>
+                                                <div class="result-bar">
+                                                    <div :style="`width: ${getProjection(vote).jaBasePct}%; background-color: #0b12cd;`"
+                                                        title="Ja (Ausgezählt)"></div>
+                                                    <div :style="`width: ${getProjection(vote).jaPredPct}%; background-color: #90caf9;`"
+                                                        title="Ja (Hochrechnung)"></div>
+                                                    <div :style="`width: ${getProjection(vote).neinPredPct}%; background-color: #ef9a9a;`"
+                                                        title="Nein (Hochrechnung)"></div>
+                                                    <div :style="`width: ${getProjection(vote).neinBasePct}%; background-color: #e53935;`"
+                                                        title="Nein (Ausgezählt)"></div>
+                                                </div>
+                                            </div>
+
+                                            <table class="striped compact">
+                                                <tbody>
+                                                    <tr>
+                                                        <td>Ja</td>
+                                                        <td class="right-align"><strong
+                                                                x-text="getProjection(vote).jaPct + '%'"></strong></td>
+                                                        <td class="right-align grey-text"
+                                                            x-text="getProjection(vote).ja.toLocaleString('de-CH')">
+                                                        </td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>Nein</td>
+                                                        <td class="right-align"><strong
+                                                                x-text="getProjection(vote).neinPct + '%'"></strong>
+                                                        </td>
+                                                        <td class="right-align grey-text"
+                                                            x-text="getProjection(vote).nein.toLocaleString('de-CH')">
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </template>
+                                    <template x-if="!vote.result">
+                                        <div class="grey-text center-align abst-vote-no-results">Noch keine Resultate
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+                            <div class="card-action">
+                                <a :href="'/' + vote.vorlagen_id + '/map'">Karte</a>
+                                <a :href="'/' + vote.vorlagen_id + '/table'">Tabelle</a>
+                            </div>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+    </template>
+</article>
+
+<script src="{% static 'abst/js/abstimmungstag.js' %}"></script>
+{% endblock %}

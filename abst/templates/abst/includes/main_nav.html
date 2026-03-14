@@ -1,0 +1,66 @@
+<div class="nav-wrapper" x-data="mainNav()">
+    <a href="{% url 'abst:index' %}" class="brand-logo left" style="margin-left: 20px;">
+        <i class="material-symbols-outlined left">how_to_vote</i>Abstimmungsstudio
+    </a>
+    
+    <ul class="right">
+        <li>
+            <a href="{% url 'abst:vorlagen' %}">
+                <i class="material-symbols-outlined left">list</i>Alle Vorlagen
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-trigger" href="#!" data-target="tage-dropdown" x-ref="tageDropdownTrigger">
+                <i class="material-symbols-outlined left">calendar_month</i>Abstimmungstage
+            </a>
+            <ul id="tage-dropdown" class="dropdown-content">
+                <template x-for="tag in tage" :key="tag.date">
+                    <li>
+                        <a :href="'/' + tag.date + '/'" class="black-text">
+                            <span x-text="formatDate(tag.date)"></span>
+                        </a>
+                    </li>
+                </template>
+                <li x-show="tage.length === 0">
+                    <a href="#!" class="grey-text">Keine Daten gefunden.</a>
+                </li>
+            </ul>
+        </li>
+    </ul>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('mainNav', () => ({
+        tage: [],
+        
+        async init() {
+            await this.fetchTage();
+            setTimeout(() => {
+                if (this.$refs.tageDropdownTrigger) {
+                    M.Dropdown.init(this.$refs.tageDropdownTrigger, {
+                        coverTrigger: false,
+                        constrainWidth: false
+                    });
+                }
+            }, 0);
+        },
+        
+        async fetchTage() {
+            try {
+                const res = await fetch(`/api/abst/tage/`);
+                this.tage = await res.json();
+            } catch (err) {
+                console.error("Failed to load tage", err);
+            }
+        },
+        
+        formatDate(dateStr) {
+            if (!dateStr) return '';
+            const parts = dateStr.split('-');
+            if (parts.length !== 3) return dateStr;
+            return `${parts[2]}.${parts[1]}.${parts[0]}`;
+        }
+    }));
+});
+</script>

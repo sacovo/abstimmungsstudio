@@ -1,16 +1,12 @@
 import numpy as np
 from django.test import TestCase
+
 from abst.predict import predict_missing_results
 
 
 class PredictTests(TestCase):
     def test_predict_missing_results(self):
-        projection = np.array([
-            [1.0, 2.0],
-            [1.0, 3.0],
-            [1.0, 4.0],
-            [1.0, 5.0]
-        ])
+        projection = np.array([[1.0, 2.0], [1.0, 3.0], [1.0, 4.0], [1.0, 5.0]])
         # Suppose coefficients should be [0.5, 0.5]
         # Then values:
         # row 0: 0.5*1 + 0.5*2 = 1.5

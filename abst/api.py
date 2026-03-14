@@ -1,15 +1,28 @@
-import time
-
-from ninja import Router, Schema
-from ninja.security import django_auth
-from ninja.pagination import paginate
 import polars as pl
+from django.views.decorators.csrf import csrf_exempt
+from ninja import Router, Schema
+from ninja.pagination import paginate
+from ninja.security import django_auth
 
 from abst.geo import get_geo_id_list
-from abst.models import Gemeinde, Kanton, Vorlage, Zaehlkreis
-from abst.schema import GemeindeResult, GemeindeSchema, KantonSchema, ResultsGemeindeSchema, ResultsKantonSchema, ResultsTotalSchema, VorlageListingSchema
-from abst.store import get_abst_result_history, get_abst_result_kantone, get_abst_result_total, get_abst_results
+from abst.models import Abstimmungstag, Gemeinde, Kanton, Vorlage, Zaehlkreis
 from abst.predict import predict_results, prepare_predict_data
+from abst.schema import (
+    AbstimmungstagSchema,
+    GemeindeResult,
+    GemeindeSchema,
+    KantonSchema,
+    ResultsGemeindeSchema,
+    ResultsKantonSchema,
+    ResultsTotalSchema,
+    VorlageListingSchema,
+)
+from abst.store import (
+    get_abst_result_history,
+    get_abst_result_kantone,
+    get_abst_result_total,
+    get_abst_results,
+)
 
 router = Router()
 
@@ -20,9 +33,22 @@ def get_kantone(request):
     return kantone
 
 
+@router.get("tage/", response=list[AbstimmungstagSchema])
+def get_abstimmungstage(request):
+    tage = Abstimmungstag.objects.all().order_by("-date")
+    return tage
+
+
 @router.get("vorlagen", response=list[VorlageListingSchema])
 @paginate(per_page=50)
-def get_vorlagen(request, region: str | None = None, date: str | None = None, name: str | None = None, sort_by: str | None = None, sort_dir: str | None = None):
+def get_vorlagen(
+    request,
+    region: str | None = None,
+    date: str | None = None,
+    name: str | None = None,
+    sort_by: str | None = None,
+    sort_dir: str | None = None,
+):
     vorlagen = Vorlage.objects.all()
     if region is not None:
         vorlagen = vorlagen.filter(region=region)
@@ -40,6 +66,7 @@ def get_vorlagen(request, region: str | None = None, date: str | None = None, na
             "region": "region",
             "finished": "finished",
             "angenommen": "angenommen",
+            "date": "tag__date",
             "result.jaStimmenInProzent": "result__jaStimmenInProzent",
             "result.stimmbeteiligungInProzent": "result__stimmbeteiligungInProzent",
         }
@@ -62,9 +89,9 @@ def get_geodata_link(request, vorlage_id: int):
     return vorlage.tag.stand.document.url if vorlage.tag.stand.document else ""
 
 
-@router.get("{vorlage_id}/total", response=ResultsTotalSchema)
+@router.get("{vorlage_id}/total", response=list[ResultsTotalSchema])
 def get_results_total(request, vorlage_id: int):
-    return get_abst_result_total(vorlage_id).to_dicts()[0]
+    return get_abst_result_total(vorlage_id).to_dicts()
 
 
 @router.get("{vorlage_id}/kantone", response=list[ResultsKantonSchema])
@@ -80,9 +107,7 @@ def get_gemeinden_stand(request, vorlage_id: int):
     if not stand.document:
         return []
 
-    gemeinden = Gemeinde.objects.filter(
-        stand=stand
-    ).order_by("geo_id")
+    gemeinden = Gemeinde.objects.filter(stand=stand).order_by("geo_id")
 
     return gemeinden
 
@@ -95,16 +120,18 @@ def get_zaehlkreise_stand(request, vorlage_id: int):
     if not stand.document:
         return []
 
-    zaehlkreise = Zaehlkreis.objects.filter(
-        gemeinde__stand=stand
-    ).select_related("gemeinde").order_by("geo_id")
+    zaehlkreise = (
+        Zaehlkreis.objects.filter(gemeinde__stand=stand)
+        .select_related("gemeinde")
+        .order_by("geo_id")
+    )
 
     return [
         {
             "name": z.name,
             "geo_id": z.geo_id,
             "kanton": z.gemeinde.kanton,
-            "kanton_id": z.gemeinde.kanton_id
+            "kanton_id": z.gemeinde.kanton_id,
         }
         for z in zaehlkreise
     ]
@@ -114,22 +141,23 @@ def get_zaehlkreise_stand(request, vorlage_id: int):
 def get_results_gemeinden(request, vorlage_id: int):
     vorlage = Vorlage.objects.get(vorlagen_id=vorlage_id)
 
-    t0 = time.time()
     if vorlage.kantonal:
         kanton = Kanton.objects.get(short=vorlage.region)
-        geo_ids = get_geo_id_list(
-            vorlage.tag.stand, kanton_id=kanton.kanton_id)
+        geo_ids = get_geo_id_list(vorlage.tag.stand, kanton_id=kanton.kanton_id)
     else:
         geo_ids = get_geo_id_list(vorlage.tag.stand)
 
     df_geo = pl.DataFrame({"geo_id": geo_ids})
-    print(f"Geo IDs loaded in {time.time() - t0:.2f} seconds")
-    t0 = time.time()
 
     df_results = get_abst_results(vorlage_id)
-    print(f"Results loaded in {time.time() - t0:.2f} seconds")
-    df_merged = df_geo.join(df_results, on="geo_id", how="left").filter(
-        pl.col("ja_prozent").is_not_null())
+    if df_results is None:
+        return []
+
+    df_merged = (
+        df_geo.join(df_results, on="geo_id", how="inner")
+        .filter(pl.col("ja_prozent").is_not_null())
+        .sort("geo_id")
+    )
 
     return df_merged.to_dicts()
 
@@ -164,10 +192,14 @@ class TestPredictionResponseSchema(Schema):
     predictions: list[SinglePredictionSchema]
 
 
-@router.post("{vorlage_id}/test_prediction", response=TestPredictionResponseSchema, auth=django_auth)
+@router.post(
+    "{vorlage_id}/test_prediction",
+    response=TestPredictionResponseSchema,
+    auth=django_auth,
+)
+@csrf_exempt
 def test_prediction(request, vorlage_id: int, payload: PredictTestSchema):
-    predicted = predict_results(
-        vorlage_id, known_geo_ids=payload.known_geo_ids)
+    predicted = predict_results(vorlage_id, known_geo_ids=payload.known_geo_ids)
 
     ja_values, bet_values, mask, geo_ids = prepare_predict_data(vorlage_id)
 
@@ -183,31 +215,38 @@ def test_prediction(request, vorlage_id: int, payload: PredictTestSchema):
     pred_ja = 0
     pred_nein = 0
 
-    for p in (predicted or []):
+    for p in predicted or []:
         if p.result is None:
             continue
         geo_id = p.geo_id
         if not old_mask.get(geo_id, True):
             diff_ja = abs(p.result.ja_prozent - true_ja.get(geo_id, 0.0))
-            diff_bet = abs(p.result.stimmbeteiligung -
-                           true_bet.get(geo_id, 0.0))
+            diff_bet = abs(p.result.stimmbeteiligung - true_bet.get(geo_id, 0.0))
             accuracies_ja.append(diff_ja)
             accuracies_bet.append(diff_bet)
 
         pred_ja += p.result.ja_stimmen
         pred_nein += p.result.nein_stimmen
 
-        pred_dicts.append({
-            "geo_id": geo_id,
-            "ja_prozent": p.result.ja_prozent,
-            "stimmbeteiligung": p.result.stimmbeteiligung
-        })
+        pred_dicts.append(
+            {
+                "geo_id": geo_id,
+                "ja_prozent": p.result.ja_prozent,
+                "stimmbeteiligung": p.result.stimmbeteiligung,
+            }
+        )
 
     report = {
-        "mae_ja_prozent": sum(accuracies_ja) / len(accuracies_ja) if accuracies_ja else 0.0,
-        "mae_stimmbeteiligung": sum(accuracies_bet) / len(accuracies_bet) if accuracies_bet else 0.0,
+        "mae_ja_prozent": sum(accuracies_ja) / len(accuracies_ja)
+        if accuracies_ja
+        else 0.0,
+        "mae_stimmbeteiligung": sum(accuracies_bet) / len(accuracies_bet)
+        if accuracies_bet
+        else 0.0,
         "num_evaluated": len(accuracies_ja),
-        "pred_ja_prozent": pred_ja / (pred_ja + pred_nein) * 100 if (pred_ja + pred_nein) > 0 else 0.0,
+        "pred_ja_prozent": pred_ja / (pred_ja + pred_nein) * 100
+        if (pred_ja + pred_nein) > 0
+        else 0.0,
     }
 
     return {"report": report, "predictions": pred_dicts}
