@@ -95,5 +95,7 @@ class Kanton(models.Model):
     kanton_id = models.IntegerField(unique=True)
     lang_code = models.CharField(max_length=2, default="de")
 
+    stimmen = models.IntegerField(default=2)
+
     def __str__(self):
         return self.name

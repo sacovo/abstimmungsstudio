@@ -32,6 +32,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "fastexcel>=0.19.0",
     "isort>=8.0.1",
     "jupyterlab>=4.5.6",
     "ruff>=0.15.5",

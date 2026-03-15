@@ -140,6 +140,10 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        downloadExcel() {
+            this.table.download("xlsx", `gemeinden_${this.vorlageId}.xlsx`, { sheetName: "Gemeinden" });
+        },
+
         updateFilter() {
             let filters = [];
 

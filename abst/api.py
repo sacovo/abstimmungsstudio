@@ -91,7 +91,10 @@ def get_geodata_link(request, vorlage_id: int):
 
 @router.get("{vorlage_id}/total", response=list[ResultsTotalSchema])
 def get_results_total(request, vorlage_id: int):
-    return get_abst_result_total(vorlage_id).to_dicts()
+    total = get_abst_result_total(vorlage_id)
+    if total is None:
+        return []
+    return total.to_dicts()
 
 
 @router.get("{vorlage_id}/kantone", response=list[ResultsKantonSchema])
@@ -143,7 +146,8 @@ def get_results_gemeinden(request, vorlage_id: int):
 
     if vorlage.kantonal:
         kanton = Kanton.objects.get(short=vorlage.region)
-        geo_ids = get_geo_id_list(vorlage.tag.stand, kanton_id=kanton.kanton_id)
+        geo_ids = get_geo_id_list(
+            vorlage.tag.stand, kanton_id=kanton.kanton_id)
     else:
         geo_ids = get_geo_id_list(vorlage.tag.stand)
 
@@ -153,13 +157,7 @@ def get_results_gemeinden(request, vorlage_id: int):
     if df_results is None:
         return []
 
-    df_merged = (
-        df_geo.join(df_results, on="geo_id", how="inner")
-        .filter(pl.col("ja_prozent").is_not_null())
-        .sort("geo_id")
-    )
-
-    return df_merged.to_dicts()
+    return df_results.to_dicts()
 
 
 @router.get("{vorlage_id}/{geo_id}/result", response=list[GemeindeResult])
@@ -199,7 +197,8 @@ class TestPredictionResponseSchema(Schema):
 )
 @csrf_exempt
 def test_prediction(request, vorlage_id: int, payload: PredictTestSchema):
-    predicted = predict_results(vorlage_id, known_geo_ids=payload.known_geo_ids)
+    predicted = predict_results(
+        vorlage_id, known_geo_ids=payload.known_geo_ids)
 
     ja_values, bet_values, mask, geo_ids = prepare_predict_data(vorlage_id)
 
@@ -221,7 +220,8 @@ def test_prediction(request, vorlage_id: int, payload: PredictTestSchema):
         geo_id = p.geo_id
         if not old_mask.get(geo_id, True):
             diff_ja = abs(p.result.ja_prozent - true_ja.get(geo_id, 0.0))
-            diff_bet = abs(p.result.stimmbeteiligung - true_bet.get(geo_id, 0.0))
+            diff_bet = abs(p.result.stimmbeteiligung -
+                           true_bet.get(geo_id, 0.0))
             accuracies_ja.append(diff_ja)
             accuracies_bet.append(diff_bet)
 

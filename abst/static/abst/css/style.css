@@ -1,6 +1,7 @@
 :root {
     --header-font: 'Bricolage Grotesque', sans-serif;
     --body-font: 'Public Sans', sans-serif;
+    --mono-font: 'Roboto Mono', monospace;
     --background-color: #fbf5ed;
     --highlight-color: #f0d962;
     --black: #000000;
@@ -142,7 +143,7 @@ body>footer h3 a {
 }
 
 .results-table td.number-cell {
-    font-family: monospace;
+    font-family: var(--mono-font);
 }
 
 .map {
@@ -334,4 +335,33 @@ table.inside tr {
 .btn,
 .btn-floating {
     background-color: #99cda9;
+}
+
+.nr {
+    font-family: var(--mono-font);
+}
+
+.yes {
+    font-weight: bold;
+}
+
+.staende {
+    display: flex;
+}
+
+.staende .stand {
+    width: 4%;
+    height: 1.0rem;
+}
+
+.staende .stand:nth-child(2n) {
+    margin-left: 0.2rem;
+}
+
+.staende .stand.yes {
+    background-color: #0b12cd;
+}
+
+.staende .stand.no {
+    background-color: #e53935;
 }

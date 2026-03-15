@@ -28,7 +28,7 @@ class AbstimmungstagSchema(ModelSchema):
 class KantonSchema(ModelSchema):
     class Meta:
         model = Kanton
-        fields = ["name", "short", "kanton_id"]
+        fields = ["name", "short", "kanton_id", "stimmen"]
 
 
 class GemeindeSchema(ModelSchema):

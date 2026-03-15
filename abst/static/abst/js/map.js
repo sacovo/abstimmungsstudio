@@ -1,5 +1,5 @@
 document.addEventListener('alpine:init', () => {
-    Alpine.data('mapView', (vorlageId, geoLink) => ({
+    Alpine.data('mapView', (vorlageId, region, geoLink) => ({
         vorlageId: vorlageId,
         geoLink: geoLink,
         mode: 'ja', // "ja" or "beteiligung"
@@ -18,6 +18,8 @@ document.addEventListener('alpine:init', () => {
         selectedCantonId: null,
         selectedFeatureType: null,
         _zoomCantonHandler: null,
+        region,
+        kantone: [],
 
 
 
@@ -37,8 +39,9 @@ document.addEventListener('alpine:init', () => {
             Promise.all([
                 fetch(this.geoLink).then(res => res.json()),
                 fetch(`/api/abst/${this.vorlageId}/gemeinden`).then(res => res.json()),
-                fetch(`/api/abst/${this.vorlageId}/kantone`).then(res => res.json())
-            ]).then(([geoData, resultsData, cantonsData]) => {
+                fetch(`/api/abst/${this.vorlageId}/kantone`).then(res => res.json()),
+                fetch(`/api/abst/kantone/`).then(res => res.json()),
+            ]).then(([geoData, resultsData, cantonsData, kantoneData]) => {
                 this.geoData = geoData;
 
                 // Map results by geo_id
@@ -53,6 +56,8 @@ document.addEventListener('alpine:init', () => {
                     }
                     this.cantonResults[kantIdStr].push(r);
                 });
+
+                this.kantone = kantoneData;
 
                 this.renderMap();
                 this.loading = false;
@@ -189,7 +194,7 @@ document.addEventListener('alpine:init', () => {
             const zaehlkreisId = topojson.feature(this.geoData, objects[zaehlKey]).features[0].properties.id
             console.log(zaehlkreisId)
 
-            const isKantonal = Object.keys(this.cantonResults).length === 1;
+            const isKantonal = region != 'CH';
 
             // Filter out Zürich (vogeId=261) and Winterthur (vogeId=230) from the main gemeinden list
             // as they are represented by their separate Zählkreise instead (only for national votes)
@@ -215,15 +220,16 @@ document.addEventListener('alpine:init', () => {
             }
 
             if (isKantonal) {
+                const key = this.kantone.find(k => k.short == this.region)?.kanton_id;
                 kantFeatures = kantFeatures.filter(f => {
-                    const matchedKey = Object.keys(this.cantonResults)[0];
-                    return f.properties && (String(f.properties.kantId) === matchedKey);
+                    return f.properties && (f.properties.kantId === key);
                 });
+                console.log("Zooming onto canton with key:", key);
+                console.log("Found features for canton:", kantFeatures);
 
                 // also filter areas for the specific canton to avoid showing the whole country hollow
                 features = features.filter(f => {
-                    const matchedKey = Object.keys(this.cantonResults)[0];
-                    return f.properties && (String(f.properties.kantId) === matchedKey);
+                    return f.properties && (f.properties.kantId === key);
                 });
                 // Re-calculate bounding box and projection to zoom onto the isolated canton/features
                 const featureCollection = { type: "FeatureCollection", features: features.concat(kantFeatures) };
@@ -414,36 +420,6 @@ document.addEventListener('alpine:init', () => {
                         }
                     }
 
-                    if (this.selectedFeatureId) {
-                        if (this.selectedFeatureType === 'canton' && String(this.selectedFeatureId) !== kantonCode) {
-                            return d3.color(color).darker(1.2).toString();
-                        } else if (this.selectedFeatureType === 'area') {
-                            return d3.color(color).darker(1.2).toString();
-                        }
-                    }
-
-                    return color;
-                })
-                .attr("pointer-events", d => {
-                    if (this.selectedCantonId == String(d.properties.kantId)) {
-                        return "none"; // disable pointer events for the selected canton to prevent clicking it when zoomed in
-                    }
-                    if (!this.showCantons) {
-                        return "none"; // disable pointer events for cantons when they are not shown to prevent interaction
-                    }
-                    return "auto";
-                })
-                .attr("fill-opacity", d => {
-                    const kantonCode = d.properties && d.properties.kantId ? String(d.properties.kantId) : String(d.id);
-                    if (+this.selectedCantonId === +kantonCode) {
-                        return 0; // transparent
-                    }
-                    if (!this.showCantons) {
-                        return 0; // hide cantons when not shown
-                    }
-
-                    const resList = this.cantonResults[kantonCode] || [];
-
                     let finalVotes = 0, totalVotesArea = 0;
 
                     resList.forEach(r => {
@@ -454,14 +430,40 @@ document.addEventListener('alpine:init', () => {
                         }
                     });
 
-                    // 0.3 if mostly predicted, up to 1.0 if fully final
-                    let baseOpacity = 0.3;
-                    if (totalVotesArea > 0) {
-                        const finalRatio = finalVotes / totalVotesArea;
-                        baseOpacity = 0.3 + (finalRatio * 0.7);
+                    const ratio = totalVotesArea > 0 ? (finalVotes / totalVotesArea) : 0;
+
+                    if (ratio < 0.2) {
+                        color = d3.color(color).darker(1.8).toString();
+                    }
+                    else if (ratio < 0.5) {
+                        color = d3.color(color).darker(1.2).toString();
+                    } else if (ratio < 0.8) {
+                        color = d3.color(color).darker(0.2).toString();
                     }
 
-                    return baseOpacity;
+                    return color;
+
+
+                })
+                .attr("pointer-events", d => {
+                    if (this.selectedCantonId == String(d.properties.kantId)) {
+                        return "none"; // disable pointer events for the selected canton to prevent clicking it when zoomed in
+                    }
+                    if (!this.showCantons) {
+                        return "none"; // disable pointer events for cantons when they are not shown to prevent interaction
+                    }
+                    return "auto";
+                })
+                .attr("")
+                .attr("fill-opacity", d => {
+                    const kantonCode = d.properties && d.properties.kantId ? String(d.properties.kantId) : String(d.id);
+                    if (+this.selectedCantonId === +kantonCode) {
+                        return 0; // transparent
+                    }
+                    if (!this.showCantons) {
+                        return 0; // hide cantons when not shown
+                    }
+                    return 1.0;
                 });
         },
 

@@ -9,247 +9,305 @@
 
 {% block content %}
 <div class="row map-layout">
-<article class="map col s12 m8 l9">
-    <h2>{{ vorlage.name }}</h2>
+    <article class="map col s12 m8 l9">
+        <h2>{{ vorlage.name }}</h2>
 
-    <!-- Scripts for TopoJSON and D3 -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://unpkg.com/topojson-client@3"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+        <!-- Scripts for TopoJSON and D3 -->
+        <script src="https://d3js.org/d3.v7.min.js"></script>
+        <script src="https://unpkg.com/topojson-client@3"></script>
+        <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <div class="wrapper" x-data="mapView('{{ vorlage.vorlagen_id }}', '{{ geo_link }}')">
-        <div class="row">
-            <div class="input-field col s12 m4">
-                <select x-model="mode" @change="updateMap" x-ref="modeSelect">
-                    <option value="ja">Ja-Stimmen Anteil</option>
-                    <option value="beteiligung">Stimmbeteiligung</option>
-                </select>
-                <label>Visualisierung</label>
+        <div class="wrapper" x-data="mapView('{{ vorlage.vorlagen_id }}', '{{ vorlage.region }}', '{{ geo_link }}')">
+            <div class="row">
+                <div class="input-field col s12 m4">
+                    <select x-model="mode" @change="updateMap" x-ref="modeSelect">
+                        <option value="ja">Ja-Stimmen Anteil</option>
+                        <option value="beteiligung">Stimmbeteiligung</option>
+                    </select>
+                    <label>Visualisierung</label>
+                </div>
+                <div class="col s12 m8 right-align" style="margin-top: 20px;">
+                    <label style="margin-right: 15px;">
+                        <input type="checkbox" class="filled-in" x-model="showCantons" @change="toggleCantons()" />
+                        <span>Kantone anzeigen</span>
+                    </label>
+                    <button class="btn-floating waves-effect waves-light" @click="fetchNewResults()"
+                        style="margin-right: 15px;" title="Resultate aktualisieren">
+                        <i class="material-symbols-outlined">refresh</i>
+                    </button>
+                    <button class="btn waves-effect waves-light blue lighten-3" @click="resetZoom()">Zoom
+                        zurücksetzen</button>
+                </div>
             </div>
-            <div class="col s12 m8 right-align" style="margin-top: 20px;">
-                <label style="margin-right: 15px;">
-                    <input type="checkbox" class="filled-in" x-model="showCantons" @change="toggleCantons()" />
-                    <span>Kantone anzeigen</span>
-                </label>
-                <button class="btn-floating waves-effect waves-light" @click="fetchNewResults()"
-                    style="margin-right: 15px;" title="Resultate aktualisieren">
-                    <i class="material-symbols-outlined">refresh</i>
-                </button>
-                <button class="btn waves-effect waves-light blue lighten-3" @click="resetZoom()">Zoom zurücksetzen</button>
-            </div>
-        </div>
 
-        <div id="map-container" style="width: 100%; height: 100%; background-color: #040f2d; position: relative;">
-            <div x-show="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-                <div class="preloader-wrapper big active">
-                    <div class="spinner-layer spinner-blue-only">
-                        <div class="circle-clipper left">
-                            <div class="circle"></div>
-                        </div>
-                        <div class="gap-patch">
-                            <div class="circle"></div>
-                        </div>
-                        <div class="circle-clipper right">
-                            <div class="circle"></div>
+            <div id="map-container" style="width: 100%; height: 100%; background-color: #040f2d; position: relative;">
+                <div x-show="loading"
+                    style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                    <div class="preloader-wrapper big active">
+                        <div class="spinner-layer spinner-blue-only">
+                            <div class="circle-clipper left">
+                                <div class="circle"></div>
+                            </div>
+                            <div class="gap-patch">
+                                <div class="circle"></div>
+                            </div>
+                            <div class="circle-clipper right">
+                                <div class="circle"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
+                <svg id="swiss-map" width="100%" height="100%"></svg>
             </div>
-            <svg id="swiss-map" width="100%" height="100%"></svg>
         </div>
-    </div>
-</article>
+    </article>
 
-<aside x-data="resultsSidebar('{{ vorlage.vorlagen_id }}', '{{ vorlage.region }}')" class="sidebar col s12 m4 l3">
-    <div class="card p-3">
+    <aside x-data="resultsSidebar('{{ vorlage.vorlagen_id }}', '{{ vorlage.region }}')" class="sidebar col s12 m4 l3">
+        <div class="card p-3">
             {% if vorlage.region == 'CH' %}
-        <div class="card-tabs">
-          <ul class="tabs tabs-fixed-width">
-            <li class="tab"><a class="active" href="#national-table">CH</a></li>
-            <li class="tab"><a href="#cantons-table">Kantone</a></li>
-          </ul>
-        </div>
-        {% else %}
-        <div class="card-content">
-            <span class="card-title" style="margin-bottom: 0;">{{ vorlage.region }}</span>
-        </div>
-        {% endif %}
-        <div class="card-content grey lighten-5">
-
-            {% if vorlage.region == 'CH' %}
-            <div id="cantons-table">
-                <table class="striped results-table compact">
-                    <thead>
-                        <tr>
-                            <th title="Kanton">Kt.</th>
-                            <th class="right-align" title="Ausgezählt">Aus.</th>
-                            <th class="right-align" title="Hochrechnung">Pro.</th>
-                        </tr>
-                    </thead>
-
-                    <template x-for="canton in cantons" :key="canton.code">
-                        <tbody>
-                            <tr @click="onCantonRowClick(canton)" style="cursor: pointer;">
-                                <td><strong x-text="canton.code"></strong></td>
-                                <td class="right-align number-cell" x-text="fmtPct(canton.jaFinalPct)"></td>
-                                <td class="right-align number-cell" x-text="fmtPct(canton.jaProjectedPct)"></td>
-                            </tr>
-                            <tr class="canton-bar-row">
-                                <td colspan="3" class="canton-bar-cell">
-                                    <div class="canton-mini-bar">
-                                        <div :style="`width:${getCantonBar(canton).jaBasePct}%; background:#0b12cd;`">
-                                        </div>
-                                        <div :style="`width:${getCantonBar(canton).jaPredPct}%; background:#90caf9;`">
-                                        </div>
-                                        <div :style="`width:${getCantonBar(canton).neinPredPct}%; background:#ef9a9a;`">
-                                        </div>
-                                        <div :style="`width:${getCantonBar(canton).neinBasePct}%; background:#e53935;`">
-                                        </div>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr x-show="expandedCanton === canton.code" style="display: none;" class="canton-row-detail">
-                                <td colspan="3" style="font-size: 0.9rem;">
-                                    <table class="table inside striped">
-                                        <tbody>
-                                          <tr>
-                                            <td>Ja</td>
-                                            <td class="right-align number-cell"><span x-text="canton.final?.ja ?? '–'"></span></td>
-                                          </tr>
-                                          <tr>
-                                            <td>Nein</td>
-                                            <td class="right-align number-cell"><span x-text="canton.final?.nein ?? '–'"></span></td>
-                                          </tr>
-                                          <tr>
-                                            <td>Beteiligung</td>
-                                            <td class="right-align number-cell"><span x-text="canton.final?.beteiligung ?? '–'"></span></td>
-                                          </tr>
-                                          <th colspan="2" x-show="canton.projection" style="display: none;">
-                                              <div style="font-size: 0.9rem; font-weight: bold;">Prognose</div>
-                                          </th>
-                                          <tr x-show="canton.projection" style="display: none;">
-                                            <td>Ja</td>
-                                            <td class="right-align number-cell"><span x-text="canton.projection?.ja ?? '–'"></span></td>
-                                          </tr>
-                                          <tr x-show="canton.projection" style="display: none;">
-                                            <td>Nein</td>
-                                            <td class="right-align number-cell"><span x-text="canton.projection?.nein ?? '–'"></span></td>
-                                          </tr>
-
-                                        </tbody>
-                                    </table>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </template>
-                </table>
+            <div class="card-tabs">
+                <ul class="tabs tabs-fixed-width">
+                    <li class="tab"><a class="active" href="#national-table">CH</a></li>
+                    <li class="tab"><a href="#cantons-table">Kantone</a></li>
+                </ul>
+            </div>
+            {% else %}
+            <div class="card-content">
+                <span class="card-title" style="margin-bottom: 0;">{{ vorlage.region }}</span>
             </div>
             {% endif %}
-            <div id="national-table">
-                <div class="results-section">
-                    <span style="font-size: 1.1rem; display: block; margin-bottom: 5px;">Ausgezählt</span>
-                    <table class="striped results-table">
-                        <tbody>
-                            <tr>
-                                <td>Ja</td>
-                                <td class="right-align number-cell"><span x-text="final.ja"></span></td>
-                                <td class="right-align number-cell"><span x-text="final.ja_pct"></span></td>
-                            </tr>
-                            <tr>
-                                <td>Nein</td>
-                                <td class="right-align number-cell"><span x-text="final.nein"></span></td>
-                                <td class="right-align number-cell"><span x-text="final.nein_pct"></span></td>
-                            </tr>
-                            <tr>
-                                <td colspan="2">Beteiligung</td>
-                                <td class="right-align number-cell" colspan="1"><span x-text="final.beteiligung"></span>
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div x-show="hasPrediction" style="display: none; margin-top: 15px;">
-                    <span style="font-size: 1.1rem; display: block; margin-bottom: 5px;">Hochrechnung</span>
-                    <table class="striped results-table">
-                        <tbody>
-                            <tr>
-                                <td>Ja</td>
-                                <td class="right-align number-cell"><span x-text="projection.ja"></span></td>
-                                <td class="right-align number-cell"><span x-text="projection.ja_pct"></span></td>
-                            </tr>
-                            <tr>
-                                <td>Nein</td>
-                                <td class="right-align number-cell"><span x-text="projection.nein"></span></td>
-                                <td class="right-align number-cell"><span x-text="projection.nein_pct"></span></td>
-                            </tr>
-                            <tr>
-                                <td colspan="2">Beteiligung</td>
-                                <td class="right-align number-cell" colspan="1"><span
-                                        x-text="projection.beteiligung"></span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
+            <div class="card-content grey lighten-5">
 
-                <div class="result-bar-container">
-                    <div class="result-bar-50-marker"></div>
-                    <div class="result-bar">
-                        <div :style="`width: ${getNationalBar().jaBasePct}%; background-color: #0b12cd;`"
-                            title="Ja (Ausgezählt)"></div>
-                        <div :style="`width: ${getNationalBar().jaPredPct}%; background-color: #90caf9;`"
-                            title="Ja (Hochrechnung)"></div>
-                        <div :style="`width: ${getNationalBar().neinPredPct}%; background-color: #ef9a9a;`"
-                            title="Nein (Hochrechnung)"></div>
-                        <div :style="`width: ${getNationalBar().neinBasePct}%; background-color: #e53935;`"
-                            title="Nein (Ausgezählt)"></div>
+                {% if vorlage.region == 'CH' %}
+                <div id="cantons-table">
+                    <table class="striped results-table compact">
+                        <thead>
+                            <tr>
+                                <th title="Kanton">Kt.</th>
+                                <th class="right-align" title="Ausgezählt">Aus.</th>
+                                <th class="right-align" title="Hochrechnung">Pro.</th>
+                                <th class="right-align" title="Standesstimmen">S</th>
+                            </tr>
+                        </thead>
+
+                        <template x-for="canton in cantons" :key="canton.code">
+                            <tbody>
+                                <tr @click="onCantonRowClick(canton)" style="cursor: pointer;">
+                                    <th><strong :class="{'yes': canton.jaProjectedPct > 50}"
+                                            x-text="canton.code"></strong></th>
+                                    <td class="right-align number-cell" x-text="fmtPct(canton.jaFinalPct)"></td>
+                                    <td class="right-align number-cell" x-text="fmtPct(canton.jaProjectedPct)"></td>
+                                    <td class="right-align number-cell" :class="{ 'yes': canton.jaProjectedPct > 50 }"
+                                        x-text="canton.stimmen"></td>
+                                </tr>
+                                <tr class="canton-bar-row">
+                                    <td colspan="4" class="canton-bar-cell">
+                                        <div class="canton-mini-bar">
+                                            <div
+                                                :style="`width:${getCantonBar(canton).jaBasePct}%; background:#0b12cd;`">
+                                            </div>
+                                            <div
+                                                :style="`width:${getCantonBar(canton).jaPredPct}%; background:#90caf9;`">
+                                            </div>
+                                            <div
+                                                :style="`width:${getCantonBar(canton).neinPredPct}%; background:#ef9a9a;`">
+                                            </div>
+                                            <div
+                                                :style="`width:${getCantonBar(canton).neinBasePct}%; background:#e53935;`">
+                                            </div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr x-show="expandedCanton === canton.code" style="display: none;"
+                                    class="canton-row-detail">
+                                    <td colspan="4" style="font-size: 0.9rem;">
+                                        <table class="table inside striped">
+                                            <tbody>
+                                                <tr>
+                                                    <td>Ja</td>
+                                                    <td class="right-align number-cell"><span
+                                                            x-text="canton.final?.ja ?? '–'"></span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Nein</td>
+                                                    <td class="right-align number-cell"><span
+                                                            x-text="canton.final?.nein ?? '–'"></span></td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Beteiligung</td>
+                                                    <td class="right-align number-cell"><span
+                                                            x-text="canton.final?.beteiligung ?? '–'"></span></td>
+                                                </tr>
+                                                <th colspan="2" x-show="canton.projection" style="display: none;">
+                                                    <div style="font-size: 0.9rem; font-weight: bold;">Prognose</div>
+                                                </th>
+                                                <tr x-show="canton.projection" style="display: none;">
+                                                    <td>Ja</td>
+                                                    <td class="right-align number-cell"><span
+                                                            x-text="canton.projection?.ja ?? '–'"></span></td>
+                                                </tr>
+                                                <tr x-show="canton.projection" style="display: none;">
+                                                    <td>Nein</td>
+                                                    <td class="right-align number-cell"><span
+                                                            x-text="canton.projection?.nein ?? '–'"></span></td>
+                                                </tr>
+
+                                            </tbody>
+                                        </table>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </template>
+                    </table>
+                </div>
+                {% endif %}
+                <div id="national-table">
+
+                    <div class="result-bar-container">
+                        <div class="result-bar-50-marker"></div>
+                        <div class="result-bar">
+                            <div :style="`width: ${getNationalBar().jaBasePct}%; background-color: #0b12cd;`"
+                                title="Ja (Ausgezählt)"></div>
+                            <div :style="`width: ${getNationalBar().jaPredPct}%; background-color: #90caf9;`"
+                                title="Ja (Hochrechnung)"></div>
+                            <div :style="`width: ${getNationalBar().neinPredPct}%; background-color: #ef9a9a;`"
+                                title="Nein (Hochrechnung)"></div>
+                            <div :style="`width: ${getNationalBar().neinBasePct}%; background-color: #e53935;`"
+                                title="Nein (Ausgezählt)"></div>
+                        </div>
+                    </div>
+
+                    <div x-show="hasPrediction" style="display: none; margin-top: 15px;">
+                        <table class="striped results-table">
+                            <tbody>
+                                <tr>
+                                    <th colspan="3">Hochrechnung</th>
+                                </tr>
+                                <tr>
+                                    <td style="width: 40%">Ja</td>
+                                    <td class="right-align number-cell" style="width: 20%"><strong
+                                            x-text="projection.ja_pct"></strong></td>
+                                    <td class="right-align number-cell grey-text" style="width: 40%"><span
+                                            x-text="projection.ja"></span></td>
+                                </tr>
+                                <tr>
+                                    <td>Nein</td>
+                                    <td class="right-align number-cell"><strong x-text="projection.nein_pct"></strong>
+                                    </td>
+                                    <td class="right-align number-cell grey-text"><span x-text="projection.nein"></span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2">Beteiligung</td>
+                                    <td class="right-align number-cell" colspan="1"><strong
+                                            x-text="projection.beteiligung"></strong></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="results-section">
+                        <table class="striped results-table">
+                            <tbody>
+                                <tr>
+                                    <th colspan="3">Ausgezählt</th>
+                                </tr>
+                                <tr>
+                                    <td>Ja</td>
+                                    <td class="right-align number-cell"><strong x-text="final.ja_pct"></strong></td>
+                                    <td class="right-align grey-text number-cell"><span x-text="final.ja"></span></td>
+                                </tr>
+                                <tr>
+                                    <td>Nein</td>
+                                    <td class="right-align number-cell"><strong x-text="final.nein_pct"></strong></td>
+                                    <td class="right-align  grey-text number-cell"><span x-text="final.nein"></span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2">Beteiligung</td>
+                                    <td class="right-align number-cell" colspan="1"><strong
+                                            x-text="final.beteiligung"></strong>
+                                    </td>
+                                </tr>
+
+                            </tbody>
+                        </table>
+                        {% if vorlage.region == "CH" %}
+                        <table>
+
+                            <tbody>
+                                <tr>
+                                    <th>
+                                        Standesstimmen
+                                    </th>
+                                    <td class="right-align">
+                                        <span class="stand right-align number-cell" x-text="standesStimmen / 2">    </span>
+                                        /
+                                        <span class="stand right-align number-cell" x-text="totalStandesStimmen / 2">    </span>
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td colspan="3">
+                                        <div class="staende">
+                                            <template x-for="s in staende" :key="s.key">
+                                                <span class="stand" :class="s.value == 1 ? 'yes': 'no'"></span>
+                                            </template>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+
+                        </table>
+
+                        {% endif %}
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+
+        <!-- Gemeinde Ergebnis Anzeige -->
+        <div class="card p-3" x-show="selectedGemeinde" style="display: none;">
+            <div class="card-content">
+                <span class="card-title" x-text="selectedGemeinde" style="margin-bottom: 0;"></span>
+            </div>
+            <div class="card-content grey lighten-5">
+                <div id="gemeinde-table">
+                    <div class="results-section">
+                        <table class="striped results-table">
+                            <tbody>
+                                <tr>
+                                    <td>Status</td>
+                                    <td class="right-align" colspan="2"><span
+                                            x-text="gemeindeResult ? gemeindeResult.status : ''"></span></td>
+                                </tr>
+                                <tr>
+                                    <td>Ja</td>
+                                    <td class="right-align number-cell"><span
+                                            x-text="gemeindeResult ? gemeindeResult.ja : ''"></span></td>
+                                    <td class="right-align number-cell"><span
+                                            x-text="gemeindeResult ? gemeindeResult.ja_pct : ''"></span></td>
+                                </tr>
+                                <tr>
+                                    <td>Nein</td>
+                                    <td class="right-align number-cell"><span
+                                            x-text="gemeindeResult ? gemeindeResult.nein : ''"></span></td>
+                                    <td class="right-align number-cell"><span
+                                            x-text="gemeindeResult ? gemeindeResult.nein_pct : ''"></span></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="2">Beteiligung</td>
+                                    <td class="right-align number-cell" colspan="1"><span
+                                            x-text="gemeindeResult ? gemeindeResult.beteiligung : ''"></span></td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
-
-
-    <!-- Gemeinde Ergebnis Anzeige -->
-    <div class="card p-3" x-show="selectedGemeinde" style="display: none;">
-        <div class="card-content">
-            <span class="card-title" x-text="selectedGemeinde" style="margin-bottom: 0;"></span>
-        </div>
-        <div class="card-content grey lighten-5">
-            <div id="gemeinde-table">
-                <div class="results-section">
-                    <table class="striped results-table">
-                        <tbody>
-                            <tr>
-                                <td>Status</td>
-                                <td class="right-align" colspan="2"><span
-                                        x-text="gemeindeResult ? gemeindeResult.status : ''"></span></td>
-                            </tr>
-                            <tr>
-                                <td>Ja</td>
-                                <td class="right-align number-cell"><span
-                                        x-text="gemeindeResult ? gemeindeResult.ja : ''"></span></td>
-                                <td class="right-align number-cell"><span
-                                        x-text="gemeindeResult ? gemeindeResult.ja_pct : ''"></span></td>
-                            </tr>
-                            <tr>
-                                <td>Nein</td>
-                                <td class="right-align number-cell"><span
-                                        x-text="gemeindeResult ? gemeindeResult.nein : ''"></span></td>
-                                <td class="right-align number-cell"><span
-                                        x-text="gemeindeResult ? gemeindeResult.nein_pct : ''"></span></td>
-                            </tr>
-                            <tr>
-                                <td colspan="2">Beteiligung</td>
-                                <td class="right-align number-cell" colspan="1"><span
-                                        x-text="gemeindeResult ? gemeindeResult.beteiligung : ''"></span></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</aside>
+    </aside>
 </div>
 
 <script>

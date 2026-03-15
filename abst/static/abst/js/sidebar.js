@@ -13,8 +13,11 @@ document.addEventListener('alpine:init', () => {
         vorlageRegion,
 
         cantons: [],
+        staende: [],
         expandedCanton: null,
         loadingCantons: false,
+        standesStimmen: 0,
+        totalStandesStimmen: 0,
 
 
 
@@ -255,57 +258,52 @@ document.addEventListener('alpine:init', () => {
                 if (!resultsRes.ok) throw new Error(`results HTTP ${resultsRes.status}`);
                 if (!kantoneRes.ok) throw new Error(`kantone HTTP ${kantoneRes.status}`);
 
-                const results = await resultsRes.json(); // [{ kanton, status, ja_stimmen, nein_stimmen, ... }]
+                const resultsAll = await resultsRes.json(); // [{ kanton, status, ja_stimmen, nein_stimmen, ... }]
                 const kantone = await kantoneRes.json(); // [{ kanton_id, short, name }]
 
                 const kantonById = new Map(
                     kantone.map((k) => [Number(k.kanton_id), { short: k.short, name: k.name }])
                 );
+                this.standesStimmen = 0;
+                this.totalStandesStimmen = 0;
+                this.cantons = kantone.map(k => {
+                    const id = Number(k.kanton_id);
+                    const results = resultsAll.filter(r => Number(r.kanton) === id);
+                    const finalResult = results.find(r => r.status === 'final') || {};
+                    const jaCounted = Number(finalResult.ja_stimmen) || 0;
+                    const neinCounted = Number(finalResult.nein_stimmen) || 0;
+                    const totalCounted = jaCounted + neinCounted;
 
-                this.cantons = (results || [])
-                    .map((r) => {
-                        const id = Number(r.kanton);
-                        const meta = kantonById.get(id) || {};
+                    const predictedResult = results.find(r => r.status === 'prediction');
+                    const jaPredicted = jaCounted + (Number(predictedResult?.ja_stimmen) || 0);
+                    const neinPredicted = neinCounted + (Number(predictedResult?.nein_stimmen) || 0);
 
-                        const ja = Number(r.ja_stimmen) || 0;
-                        const nein = Number(r.nein_stimmen) || 0;
-                        const total = ja + nein;
+                    const totalPredicted = (jaPredicted + neinPredicted) || 0;
+                    console.log(`Kanton ${k.short}: counted Ja=${jaCounted}, Nein=${neinCounted}, predicted Ja=${jaPredicted}, Nein=${neinPredicted}`);
+                    this.totalStandesStimmen += k.stimmen;
+                    this.standesStimmen += jaPredicted / (totalPredicted) > 0.5 ? k.stimmen : 0;
 
-                        const jaFinalPct = total > 0 ? (ja / total) * 100 : null;
+                    return {
+                        id,
+                        code: k.short || `K${id}`,
+                        name: k.name || `Kanton ${id}`,
+                        status: predictedResult ? 'prediction' : 'final',
+                        stimmen: k.stimmen == 2 ? '1' : '½',
+                        final: {
+                            ja: jaCounted.toLocaleString('de-CH'),
+                            nein: neinCounted.toLocaleString('de-CH'),
+                            beteiligung: this.calcBeteiligung(finalResult.anzahl_stimmberechtigte, totalCounted)
+                        },
+                        projection: predictedResult ? {
+                            ja: jaPredicted.toLocaleString('de-CH'),
+                            nein: neinPredicted.toLocaleString('de-CH')
+                        } : null,
+                        jaFinalPct: totalCounted > 0 ? (jaCounted / totalCounted) * 100 : null,
+                        jaProjectedPct: totalPredicted > 0 ? (jaPredicted / totalPredicted) * 100 : null
+                    }
+                }).sort((a, b) => a.code.localeCompare(b.code));
+                this.staende = this.iterStaende()
 
-                        // Prognose-Fallback: falls keine separaten Prognosefelder vorhanden sind -> final verwenden
-                        const jaProj = Number(r.ja_stimmen_prognose ?? r.ja_stimmen_hochrechnung);
-                        const neinProj = Number(r.nein_stimmen_prognose ?? r.nein_stimmen_hochrechnung);
-                        const projTotal = jaProj + neinProj;
-                        const jaProjectedPct =
-                            Number.isFinite(jaProj) && Number.isFinite(neinProj) && projTotal > 0
-                                ? (jaProj / projTotal) * 100
-                                : jaFinalPct;
-
-                        return {
-                            id,
-                            code: meta.short || `K${id}`,
-                            name: meta.name || `Kanton ${id}`,
-                            status: r.status || '',
-                            final: {
-                                ja: ja.toLocaleString('de-CH'),
-                                nein: nein.toLocaleString('de-CH'),
-                                beteiligung: this.calcBeteiligung(
-                                    r.anzahl_stimmberechtigte,
-                                    ja + nein
-                                )
-                            },
-                            projection: Number.isFinite(jaProj) && Number.isFinite(neinProj)
-                                ? {
-                                    ja: jaProj.toLocaleString('de-CH'),
-                                    nein: neinProj.toLocaleString('de-CH')
-                                }
-                                : null,
-                            jaFinalPct,
-                            jaProjectedPct
-                        };
-                    })
-                    .sort((a, b) => a.code.localeCompare(b.code));
             } catch (err) {
                 console.error('Kantonsdaten konnten nicht geladen werden:', err);
                 this.cantons = [];
@@ -407,11 +405,28 @@ document.addEventListener('alpine:init', () => {
             };
         },
 
+        refresh() {
+            this.loadStats();
+            if (this.vorlageRegion === 'CH') {
+                this.fetchCantons();
+            }
+        },
+
+        iterStaende() {
+            const stimmen = []
+            for (let i = 0; i < this.totalStandesStimmen; i++) {
+                stimmen.push({
+                    value: i < this.standesStimmen ? 1 : 0,
+                    key: i
+                });
+            }
+            return stimmen;
+        },
 
 
         async init() {
             window.addEventListener('gemeinde-selected', this.handleGemeindeSelected.bind(this));
-            window.addEventListener('results-updated', this.loadStats.bind(this));
+            window.addEventListener('results-updated', this.refresh.bind(this));
 
             if (this.vorlageRegion === 'CH') {
                 this.fetchCantons();

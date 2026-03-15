@@ -355,21 +355,28 @@ def store_results(results: list[GemeindeResult]):
 def update_vorlage(abst_id):
     vorlage = Vorlage.objects.get(vorlagen_id=abst_id)
     total = get_abst_result_total(abst_id)
+    total = total.rows(named=True) if total is not None else []
 
     projection = defaultdict(int)
+    final = defaultdict(int)
 
-    for r in total.rows(named=True):
-        if r["status"] == "predicted":
+    for r in total:
+        if r["status"] == "prediction":
             projection = r
+        elif r["status"] == "final":
+            final = r
 
     with transaction.atomic():
         result = vorlage.result or {}
         result["jaPredicted"] = projection["ja_stimmen"]
         result["neinPredicted"] = projection["nein_stimmen"]
         result["stimmberechtigtePredicted"] = projection["anzahl_stimmberechtigte"]
+        result["jaStimmenAbsolut"] = final["ja_stimmen"]
+        result["neinStimmenAbsolut"] = final["nein_stimmen"]
+        result["anzahlStimmberechtigte"] = final["anzahl_stimmberechtigte"]
 
         vorlage.result = result
-        vorlage.save(update_fields=["result"])
+        vorlage.save()
 
 
 def filter_zk(abst_id) -> str:
@@ -411,6 +418,9 @@ def get_abst_result_total(abst_id: int):
         result = query_api.query_data_frame(query)
         if isinstance(result, list):
             result = pd.concat(result)
+
+        if len(result) == 0:
+            return None
 
         result = pl.from_pandas(result).select(
             "status",

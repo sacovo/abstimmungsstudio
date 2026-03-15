@@ -27,7 +27,7 @@ document.addEventListener('alpine:init', () => {
             if (this.loading) return;
             this.loading = true;
             try {
-                const response = await fetch(`/api/abst/vorlagen?date=${this.date}&limit=100`);
+                const response = await fetch(`/api/abst/vorlagen?date=${this.date}`);
                 const data = await response.json();
 
                 const grouped = {};
@@ -74,10 +74,18 @@ document.addEventListener('alpine:init', () => {
             const jaPredPct = total > 0 ? (jaPred / total * 100) : 0;
             const neinBasePct = total > 0 ? (neinBase / total * 100) : 0;
             const neinPredPct = total > 0 ? (neinPred / total * 100) : 0;
+            const jaCountedPct = (total > 0 ? (jaBase / (jaBase + neinBase) * 100) : 0).toFixed(1);
+            const neinCountedPct = (total > 0 ? (neinBase / (jaBase + neinBase) * 100) : 0).toFixed(1);
+            const totalCounted = jaBase + neinBase;
+
+            const beteiligung = res.anzahlStimmberechtigte ? (((jaBase + neinBase) / res.anzahlStimmberechtigte) * 100).toFixed(1) : '0.0';
+
+            const totalBerechtigte = res.anzahlStimmberechtigte + res.stimmberechtigtePredicted;
+            const beteiligungTotal = totalBerechtigte > 0 ? (((jaBase + neinBase + jaPred + neinPred) / totalBerechtigte) * 100).toFixed(1) : '0.0';
 
             return {
-                ja, nein, jaPct, neinPct, total,
-                jaBasePct, jaPredPct, neinBasePct, neinPredPct
+                ja, nein, jaPct, neinPct, total, jaBase, neinBase, totalCounted,
+                jaBasePct, jaPredPct, neinBasePct, neinPredPct, jaCountedPct, neinCountedPct, beteiligung, beteiligungTotal
             };
         }
     }));

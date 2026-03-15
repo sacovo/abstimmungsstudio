@@ -66,7 +66,7 @@ def predict_results_task(vorlagen_id: int):
     ja_values, bet_values, mask, geo_ids = prepare_predict_data(vorlagen_id)
     known_results = sum(1 for m in mask if not m)
 
-    if known_results > 5:
+    if known_results > 2:
         predict_and_store(vorlagen_id)
         update_vorlage(vorlagen_id)
     else:

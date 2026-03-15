@@ -101,6 +101,6 @@ class VorlageAdmin(ModelAdmin):
 
 @admin.register(Kanton)
 class KantonAdmin(ModelAdmin):
-    list_display = ("name", "short", "lang_code")
+    list_display = ("name", "short", "lang_code", "stimmen")
 
-    list_editable = ("short", "lang_code")
+    list_editable = ("short", "lang_code", "stimmen")
