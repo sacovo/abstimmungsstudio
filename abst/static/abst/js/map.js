@@ -342,6 +342,16 @@ document.addEventListener('alpine:init', () => {
                     .attr("pointer-events", "none");
             }
 
+            // Draw Logo
+            this.svg.append("image")
+                .attr("href", "/static/abst/imgs/logo.png")
+                .attr("x", this.width - 200)
+                .attr("y", this.height - 40)
+                .attr("width", 180)
+                .attr("height", 19)
+                .attr("opacity", 0.8)
+                .attr("pointer-events", "none");
+
             this.updateMap();
         },
 
@@ -518,6 +528,146 @@ document.addEventListener('alpine:init', () => {
             window.dispatchEvent(new CustomEvent('gemeinde-selected', {
                 detail: null
             }));
+        },
+
+        async exportMap() {
+            const svgElement = document.getElementById("swiss-map");
+            const serializer = new XMLSerializer();
+            let source = serializer.serializeToString(svgElement);
+
+            // Fixed export resolution
+            const exportWidth = 1920;
+            const exportHeight = 1080;
+
+            const currentWidth = svgElement.clientWidth || this.width || 800;
+            const currentHeight = svgElement.clientHeight || this.height || 600;
+            // Bestimme die "virtuelle" Viewbox, damit später alle Elemente proportional richtig platziert werden
+            const viewBox = [0, 0, currentWidth, currentHeight];
+
+            // Ensure physical dimensions are set on the SVG root instead of % or auto
+            // so that the browser's Image renderer knows exactly how big it should be
+            source = source.replace(/^<svg[^>]*>/, (match) => {
+                let newMatch = match.replace(/width="[^"]+"/, `width="${exportWidth}"`);
+                newMatch = newMatch.replace(/height="[^"]+"/, `height="${exportHeight}"`);
+                if (!newMatch.includes('width=')) newMatch = newMatch.replace('<svg', `<svg width="${exportWidth}"`);
+                if (!newMatch.includes('height=')) newMatch = newMatch.replace('<svg', `<svg height="${exportHeight}"`);
+
+                // Always use 0 0 exportWidth exportHeight as Viewbox so the image
+                // is completely scaled to Full-HD space without weird letterboxing
+                const viewBoxStr = `0 0 ${exportWidth} ${exportHeight}`;
+
+                // Set viewBox to coordinate system if missing
+                if (!newMatch.includes('viewBox=')) {
+                    newMatch = newMatch.replace('<svg', `<svg viewBox="${viewBoxStr}" preserveAspectRatio="xMidYMid meet"`);
+                } else {
+                    // Update existing viewBox to ensure it maps correctly
+                    newMatch = newMatch.replace(/viewBox="[^"]+"/, `viewBox="${viewBoxStr}"`);
+                }
+
+                return newMatch;
+            });
+
+            // Passen wir den transform der Gruppe .g so an, 
+            // dass es sich in den exportWidth/exportHeight abzeichnet anstatt im kleinen Format
+            // Scale and Translate map
+            const scaleX = exportWidth / currentWidth;
+            const scaleY = exportHeight / currentHeight;
+            const mapScale = Math.min(scaleX, scaleY);
+
+            // Finde das transform element vom g
+            source = source.replace(/<g([^>]*)transform="([^"]*)"/, (match, gAttrs, transform) => {
+                // Wir fügen eine zusätzliche Skalierung/Transformation ein, um die Ansicht passend zum Container anzupassen.
+                // Da wir das Bild auch vertikal bei der Zusammenstellung zentrieren, zentrieren wir hier
+                // horizontal falls das Fenster ein ungünstiges Seitenverhältnis hat.
+                const cx = (exportWidth - (currentWidth * mapScale)) / 2;
+                return `<g${gAttrs}transform="translate(${cx}, 0) scale(${mapScale}) ${transform}"`;
+            });
+            // Falls g noch keinen transform hat:
+            if (!source.includes('transform=')) {
+                const cx = (exportWidth - (currentWidth * mapScale)) / 2;
+                source = source.replace('<g', `<g transform="translate(${cx}, 0) scale(${mapScale})"`);
+            }
+
+            // Adjust logo coordinates dynamically using string replacement to stay in bottom right based on the new viewbox
+            source = source.replace(/<image[^>]*href="\/static\/abst\/imgs\/logo\.png"[^>]*>/g, (imgMatch) => {
+                let newImg = imgMatch.replace(/x="[^"]+"/, `x="${exportWidth - 200}"`);
+                newImg = newImg.replace(/y="[^"]+"/, `y="${exportHeight - 40}"`);
+                return newImg;
+            });
+
+            // Konvertiere die externe Referenz zu einer absoluten URL oder füge namespace hinzu
+            if (!source.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+                source = source.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+            }
+            if (!source.match(/^<svg[^>]+"http\:\/\/www\.w3\.org\/1999\/xlink"/)) {
+                source = source.replace(/^<svg/, '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+            }
+
+            // Umgehen der Canvas-Security-Sperre: Bilddaten als Base64 laden und einbetten
+            try {
+                const logoResponse = await fetch("/static/abst/imgs/logo.png");
+                const logoBlob = await logoResponse.blob();
+                const logoBase64 = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result);
+                    reader.readAsDataURL(logoBlob);
+                });
+                source = source.replace(/href="\/static\/abst\/imgs\/logo\.png"/g, `href="${logoBase64}"`);
+            } catch (error) {
+                console.error("Fehler beim Laden des Logos als Base64:", error);
+                const baseUrl = window.location.origin;
+                source = source.replace(/href="\/static\/abst\/imgs\/logo\.png"/g, `href="${baseUrl}/static/abst/imgs/logo.png"`);
+            }
+
+            source = '<?xml version="1.0" standalone="no"?>\r\n' + source;
+            const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(source);
+
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement("canvas");
+                // Feste Größe der Karte verwenden, plus Platz für den Titel oben
+                const headerHeight = 100;
+                canvas.width = exportWidth;
+                canvas.height = exportHeight + headerHeight;
+
+                const ctx = canvas.getContext("2d");
+
+                // Hintergrundfarbe des map-containers setzen, da SVG eventuell transparent ist
+                ctx.fillStyle = "#040f2d";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                // SVG zeichnen, dabei um headerHeight nach unten verschieben
+                ctx.drawImage(img, 0, headerHeight);
+
+                // Titeltext aus dem h2 Element holen
+                const titleElement = document.querySelector('article.map h2');
+                const titleText = titleElement ? titleElement.innerText : "Abstimmung";
+
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 28px sans-serif";
+                ctx.textBaseline = "top";
+                ctx.textAlign = "left";
+
+                // Titel oben links schreiben
+                ctx.fillText(titleText, 40, 40);
+
+                // Region oben rechts schreiben
+                if (this.region) {
+                    ctx.font = "bold 24px sans-serif";
+                    ctx.textAlign = "right";
+                    ctx.fillText(this.region, canvas.width - 40, 48);
+                }
+
+                // Als PNG exportieren
+                const pngUrl = canvas.toDataURL("image/png");
+                const downloadLink = document.createElement("a");
+                downloadLink.href = pngUrl;
+                downloadLink.download = "karte_" + this.vorlageId + ".png";
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            };
+            img.src = url;
         }
     }));
 });
