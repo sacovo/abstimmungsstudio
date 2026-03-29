@@ -1,0 +1,189 @@
+{% extends 'abst/base.html' %}
+{% load static %}
+
+{% block title %}{{ vorlage.name }} - Analyse{% endblock %}
+
+{% block nav %}
+{% include 'abst/includes/vorlage_nav.html' %}
+{% endblock %}
+
+{% block content %}
+<article>
+    <h4>{{ vorlage.name }} - Scatterplot Analyse</h4>
+
+    <style>
+        .scatter-layout {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: stretch;
+        }
+
+        .scatter-layout-left {
+            flex: 1 1 70%;
+            max-width: calc(70% - 0.5rem);
+            min-width: 300px;
+            padding: 0;
+        }
+
+        .scatter-layout-right {
+            flex: 1 1 30%;
+            max-width: calc(30% - 0.5rem);
+            min-width: 300px;
+            padding: 0;
+        }
+
+        @media (max-width: 992px) {
+            .scatter-layout-left,
+            .scatter-layout-right {
+                flex-basis: 100%;
+                max-width: 100%;
+            }
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+
+    <div x-data="scatterplotView('{{ vorlage.vorlagen_id }}')" x-init="init()">
+        <div class="row scatter-layout">
+            <div class="col s12 scatter-layout-left">
+                <div id="scatterplot-container" style="width: 100%; height: 74vh; background: #f5f7fa; position: relative; border-radius: 12px; overflow: hidden;">
+                    <div x-show="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20;">
+                        <div class="preloader-wrapper big active">
+                            <div class="spinner-layer spinner-blue-only">
+                                <div class="circle-clipper left"><div class="circle"></div></div>
+                                <div class="gap-patch"><div class="circle"></div></div>
+                                <div class="circle-clipper right"><div class="circle"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div x-show="error" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 15; background: rgba(255,255,255,0.9);">
+                        <p class="red-text" x-text="error"></p>
+                    </div>
+                    <div id="scatterplot" style="width: 100%; height: 100%;"></div>
+                </div>
+            </div>
+
+            <aside class="col s12 scatter-layout-right">
+                <div class="card" style="height: 100%; margin: 0; border-radius: 12px;">
+                    <div class="card-content" style="padding-bottom: 6px;">
+                        <span class="card-title" style="font-size: 1.3rem;">Achsen und Daten</span>
+
+                        <div class="section" style="padding-top: 0;">
+                            <h6 style="margin: 0 0 0.5rem 0; font-weight: 600;">Achsen</h6>
+
+                            <div class="input-field">
+                                <select x-model="xMetric" @change="onMetricChange" x-ref="xMetricSelect">
+                                    <template x-for="metric in metrics" :key="metric.id + '-x'">
+                                        <option :value="metric.id" x-text="metric.name"></option>
+                                    </template>
+                                </select>
+                                <label>X-Achse</label>
+                            </div>
+
+                            <div class="input-field">
+                                <select x-model="yMetric" @change="onMetricChange" x-ref="yMetricSelect">
+                                    <template x-for="metric in metrics" :key="metric.id + '-y'">
+                                        <option :value="metric.id" x-text="metric.name"></option>
+                                    </template>
+                                </select>
+                                <label>Y-Achse</label>
+                            </div>
+
+                            <div class="input-field">
+                                <select x-model="sizeMetric" @change="onMetricChange" x-ref="sizeMetricSelect">
+                                    <template x-for="metric in metrics" :key="metric.id + '-size'">
+                                        <option :value="metric.id" x-text="metric.name"></option>
+                                    </template>
+                                </select>
+                                <label>Groesse</label>
+                            </div>
+                        </div>
+
+                        <div class="section" x-show="usesWahlenSection()" x-cloak>
+                            <h6 style="margin: 0.5rem 0; font-weight: 600;">Wahlen</h6>
+
+                            <div class="input-field">
+                                <select x-model="wahlenScope" @change="onScopeChange" x-ref="scopeSelect">
+                                    <template x-for="scope in scopes" :key="scope.id">
+                                        <option :value="scope.id" x-text="scope.name"></option>
+                                    </template>
+                                </select>
+                                <label>Wahl-Ebene</label>
+                            </div>
+
+                            <div class="input-field">
+                                <select x-model="wahlenOptionId" @change="loadData" x-ref="optionSelect">
+                                    <template x-for="option in currentWahlenOptions()" :key="option.id">
+                                        <option :value="String(option.id)" x-text="option.name"></option>
+                                    </template>
+                                </select>
+                                <label>Wahl-Option</label>
+                            </div>
+
+                            <div class="input-field">
+                                <select x-model="wahlenMode" @change="loadData" x-ref="modeSelect">
+                                    <option value="current">Aktuelle Wahl</option>
+                                    <option value="last">Letzte Wahl</option>
+                                    <option value="diff">Differenz</option>
+                                </select>
+                                <label>Wahl-Modus</label>
+                            </div>
+                        </div>
+
+                        <div class="section" x-show="usesAbstimmungenSection()" x-cloak>
+                            <h6 style="margin: 0.5rem 0; font-weight: 600;">Abstimmungen</h6>
+
+                            <div class="input-field" style="margin-bottom: 0.2rem;">
+                                <input
+                                    id="abstimmung-search"
+                                    type="text"
+                                    x-model="abstimmungSearch"
+                                    @input="onAbstimmungSearchInput"
+                                    placeholder="Vorlage suchen..."
+                                >
+                                <label for="abstimmung-search" class="active">Suche Vorlage</label>
+                            </div>
+
+                            <div class="input-field">
+                                <select x-model="abstimmungVorlageId" @change="loadData" x-ref="abstimmungVorlageSelect">
+                                    <template x-for="vorlage in abstimmungResults" :key="vorlage.id">
+                                        <option :value="vorlage.id" x-text="`${vorlage.name} (${vorlage.region})`"></option>
+                                    </template>
+                                </select>
+                                <label>Vergleichsvorlage</label>
+                            </div>
+
+                            <div class="input-field">
+                                <select x-model="abstimmungResultMode" @change="loadData" x-ref="abstimmungModeSelect">
+                                    <option value="ja_prozent">Ja-Stimmen in %</option>
+                                    <option value="stimmbeteiligung">Stimmbeteiligung in %</option>
+                                </select>
+                                <label>Kennzahl Vergleichsvorlage</label>
+                            </div>
+                        </div>
+
+
+                        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                            <button class="btn waves-effect waves-light" @click="loadData()" :disabled="loading">
+                                <i class="material-symbols-outlined left">refresh</i>Aktualisieren
+                            </button>
+                            <button class="btn waves-effect waves-light green" @click="downloadPng()" :disabled="!points.length">
+                                <i class="material-symbols-outlined left">image</i>PNG
+                            </button>
+                            <button class="btn waves-effect waves-light" @click="downloadExcel()">
+                                <i class="material-symbols-outlined left">file_download</i>Excel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+</article>
+
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="{% static 'abst/js/scatterplot.js' %}"></script>
+{% endblock %}

@@ -2,11 +2,13 @@ import datetime
 from collections import defaultdict
 from contextlib import contextmanager
 from datetime import date
+from typing import Literal
 
 import pandas as pd
 import polars as pl
 import requests
 from django.conf import settings
+from django.core.cache import cache
 from django.db import transaction
 from influxdb_client.client.influxdb_client import InfluxDBClient
 from influxdb_client.client.write_api import SYNCHRONOUS
@@ -306,6 +308,205 @@ def get_wahlen_results_lager(lager_id: int, mode: str = "current"):
         )
     )
     return get_wahlen_results_multi(partei_ids=partei_ids, mode=mode)
+
+
+SCATTER_ALLOWED_METRICS = {
+    "ja_prozent",
+    "stimmbeteiligung",
+    "anzahl_stimmberechtigte",
+    "wahlen_result",
+    "abstimmung_result",
+}
+
+
+def _empty_scatter_df() -> pl.DataFrame:
+    return pl.DataFrame(
+        schema={
+            "geo_id": pl.Int32,
+            "name": pl.Utf8,
+            "kanton": pl.Utf8,
+            "kanton_id": pl.Int32,
+            "status": pl.Utf8,
+            "ja_prozent": pl.Float64,
+            "stimmbeteiligung": pl.Float64,
+            "anzahl_stimmberechtigte": pl.Int64,
+            "wahlen_value": pl.Float64,
+            "abstimmung_value": pl.Float64,
+            "x_value": pl.Float64,
+            "y_value": pl.Float64,
+            "size_value": pl.Float64,
+        }
+    )
+
+
+def _get_scatter_geo_df(vorlage: Vorlage) -> pl.DataFrame:
+    gemeinden = Gemeinde.objects.filter(stand=vorlage.tag.stand)
+
+    if vorlage.kantonal:
+        kanton = Kanton.objects.filter(short=vorlage.region).first()
+        if kanton is None:
+            return pl.DataFrame(schema={"geo_id": pl.Int32})
+        gemeinden = gemeinden.filter(kanton_id=kanton.kanton_id)
+
+    rows = list(
+        gemeinden.values(
+            "geo_id",
+            "name",
+            "kanton",
+            "kanton_id",
+        )
+    )
+    if not rows:
+        return pl.DataFrame(schema={"geo_id": pl.Int32})
+
+    return pl.DataFrame(rows).with_columns(pl.col("geo_id").cast(pl.Int32))
+
+
+def _get_scatter_wahlen_df(
+    scope: Literal["partei", "parteigruppe", "lager"],
+    option_id: int,
+    mode: Literal["current", "last", "diff"] = "current",
+) -> pl.DataFrame | None:
+    if scope == "partei":
+        return get_wahlen_results(partei_id=option_id, mode=mode)
+    if scope == "parteigruppe":
+        return get_wahlen_results_parteigruppe(parteigruppen_id=option_id, mode=mode)
+    return get_wahlen_results_lager(lager_id=option_id, mode=mode)
+
+
+def _get_scatter_abstimmung_df(
+    other_vorlage_id: int,
+    metric: Literal["ja_prozent", "stimmbeteiligung"] = "ja_prozent",
+) -> pl.DataFrame | None:
+    other_df = get_abst_results(other_vorlage_id)
+    if other_df is None or other_df.is_empty():
+        return None
+
+    return other_df.select(
+        "geo_id",
+        pl.col(metric).cast(pl.Float64).alias("abstimmung_value"),
+    )
+
+
+def get_scatterplot_data(
+    vorlage_id: int,
+    x_metric: str,
+    y_metric: str,
+    size_metric: str,
+    wahlen_scope: Literal["partei", "parteigruppe", "lager"] = "partei",
+    wahlen_option_id: int | None = None,
+    wahlen_mode: Literal["current", "last", "diff"] = "current",
+    abstimmung_vorlage_id: int | None = None,
+    abstimmung_result_mode: Literal["ja_prozent",
+                                    "stimmbeteiligung"] = "ja_prozent",
+) -> pl.DataFrame:
+    metrics = {x_metric, y_metric, size_metric}
+    invalid = metrics - SCATTER_ALLOWED_METRICS
+    if invalid:
+        raise ValueError(f"Ungueltige Metrik: {', '.join(sorted(invalid))}")
+
+    needs_wahlen = "wahlen_result" in metrics
+    if needs_wahlen and wahlen_option_id is None:
+        raise ValueError(
+            "wahlen_option_id ist erforderlich fuer wahlen_result")
+
+    needs_abstimmung = "abstimmung_result" in metrics
+    if needs_abstimmung and abstimmung_vorlage_id is None:
+        raise ValueError(
+            "abstimmung_vorlage_id ist erforderlich fuer abstimmung_result")
+
+    cache_key = (
+        f"scatter:{vorlage_id}:{x_metric}:{y_metric}:{size_metric}:"
+        f"{wahlen_scope}:{wahlen_option_id}:{wahlen_mode}:"
+        f"{abstimmung_vorlage_id}:{abstimmung_result_mode}"
+    )
+    cached_rows = cache.get(cache_key)
+    if cached_rows is not None:
+        return pl.DataFrame(cached_rows)
+
+    vorlage = Vorlage.objects.select_related(
+        "tag__stand").get(vorlagen_id=vorlage_id)
+    geo_df = _get_scatter_geo_df(vorlage)
+    if geo_df.is_empty():
+        return _empty_scatter_df()
+
+    abst_df = get_abst_results(vorlage_id)
+    if abst_df is None:
+        return _empty_scatter_df()
+
+    merged = abst_df.join(geo_df, on="geo_id", how="inner")
+
+    if needs_wahlen:
+        if wahlen_option_id is None:
+            raise ValueError(
+                "wahlen_option_id ist erforderlich fuer wahlen_result")
+
+        wahlen_df = _get_scatter_wahlen_df(
+            scope=wahlen_scope,
+            option_id=wahlen_option_id,
+            mode=wahlen_mode,
+        )
+        if wahlen_df is not None and not wahlen_df.is_empty():
+            merged = merged.join(
+                wahlen_df.rename({"value": "wahlen_value"}),
+                on="geo_id",
+                how="left",
+            )
+        else:
+            merged = merged.with_columns(
+                pl.lit(None).cast(pl.Float64).alias("wahlen_value"))
+    else:
+        merged = merged.with_columns(
+            pl.lit(None).cast(pl.Float64).alias("wahlen_value"))
+
+    if needs_abstimmung:
+        if abstimmung_vorlage_id is None:
+            raise ValueError(
+                "abstimmung_vorlage_id ist erforderlich fuer abstimmung_result")
+
+        abstimmung_df = _get_scatter_abstimmung_df(
+            other_vorlage_id=abstimmung_vorlage_id,
+            metric=abstimmung_result_mode,
+        )
+        if abstimmung_df is not None and not abstimmung_df.is_empty():
+            merged = merged.join(abstimmung_df, on="geo_id", how="left")
+        else:
+            merged = merged.with_columns(pl.lit(None).cast(
+                pl.Float64).alias("abstimmung_value"))
+    else:
+        merged = merged.with_columns(pl.lit(None).cast(
+            pl.Float64).alias("abstimmung_value"))
+
+    metric_to_expr = {
+        "ja_prozent": pl.col("ja_prozent").cast(pl.Float64),
+        "stimmbeteiligung": pl.col("stimmbeteiligung").cast(pl.Float64),
+        "anzahl_stimmberechtigte": pl.col("anzahl_stimmberechtigte").cast(pl.Float64),
+        "wahlen_result": pl.col("wahlen_value").cast(pl.Float64),
+        "abstimmung_result": pl.col("abstimmung_value").cast(pl.Float64),
+    }
+
+    result = merged.with_columns(
+        metric_to_expr[x_metric].alias("x_value"),
+        metric_to_expr[y_metric].alias("y_value"),
+        metric_to_expr[size_metric].alias("size_value"),
+    ).select(
+        "geo_id",
+        "name",
+        "kanton",
+        "kanton_id",
+        "status",
+        "ja_prozent",
+        "stimmbeteiligung",
+        "anzahl_stimmberechtigte",
+        "wahlen_value",
+        "abstimmung_value",
+        "x_value",
+        "y_value",
+        "size_value",
+    ).sort("geo_id")
+
+    cache.set(cache_key, result.to_dicts(), timeout=120)
+    return result
 
 
 def import_tag(tag: Abstimmungstag):

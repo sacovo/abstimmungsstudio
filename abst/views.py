@@ -45,6 +45,11 @@ def vorlage_table_view(request, vorlage_id):
     return render(request, "abst/vorlage_table.html", {"vorlage": vorlage})
 
 
+def vorlage_scatterplot_view(request, vorlage_id):
+    vorlage = Vorlage.objects.get(vorlagen_id=vorlage_id)
+    return render(request, "abst/vorlage_scatterplot.html", {"vorlage": vorlage})
+
+
 def vorlage_compare_view(request, vorlage_id, other_id):
     vorlage = Vorlage.objects.get(vorlagen_id=vorlage_id)
     other = Vorlage.objects.get(vorlagen_id=other_id)

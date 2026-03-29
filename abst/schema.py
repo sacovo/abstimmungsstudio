@@ -159,3 +159,40 @@ class ParteiGemeindeResultSchema(Schema):
 class WahlenOptionSchema(Schema):
     id: int
     name: str
+
+
+class ScatterMetricOptionSchema(Schema):
+    id: str
+    name: str
+
+
+class ScatterScopeOptionSchema(Schema):
+    id: Literal["partei", "parteigruppe", "lager"]
+    name: str
+
+
+class ScatterPointSchema(Schema):
+    geo_id: int
+    name: str
+    kanton: str
+    kanton_id: int
+
+    status: Literal["final", "prediction"]
+
+    ja_prozent: float
+    stimmbeteiligung: float
+    anzahl_stimmberechtigte: int
+    wahlen_value: float | None = None
+    abstimmung_value: float | None = None
+
+    x_value: float | None = None
+    y_value: float | None = None
+    size_value: float | None = None
+
+
+class ScatterOptionsSchema(Schema):
+    metrics: list[ScatterMetricOptionSchema]
+    scopes: list[ScatterScopeOptionSchema]
+    parteien: list[WahlenOptionSchema]
+    parteigruppen: list[WahlenOptionSchema]
+    lager: list[WahlenOptionSchema]

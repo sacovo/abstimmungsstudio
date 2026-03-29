@@ -27,6 +27,11 @@
                 <i class="material-symbols-outlined left">table_chart</i>Tabelle
             </a>
         </li>
+        <li>
+            <a href="{% url 'abst:vorlage_scatterplot' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">scatter_plot</i>Analyse
+            </a>
+        </li>
         
         <!-- Search Dropdown -->
         <li>
@@ -41,7 +46,7 @@
                 </li>
                 <template x-for="v in vorlagen" :key="v.vorlagen_id">
                     <li>
-                        <a :href="'/' + v.vorlagen_id + '/' + ((window.location.pathname.includes('table')) ? 'table/' : 'map/')" class="black-text truncate" :title="v.name">
+                            <a :href="'/' + v.vorlagen_id + '/' + currentViewPath()" class="black-text truncate" :title="v.name">
                             <span x-text="v.name.slice(0, 50) + (v.name.length > 50 ? '...' : '') + ' (' + v.region + ')'"></span>
                         </a>
                     </li>
@@ -69,6 +74,11 @@
         <li>
             <a href="{% url 'abst:vorlage_table' vorlage.vorlagen_id %}">
                 <i class="material-symbols-outlined left">table_chart</i>Tabelle
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:vorlage_scatterplot' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">scatter_plot</i>Analyse
             </a>
         </li>
         <li>
@@ -124,10 +134,15 @@ document.addEventListener('alpine:init', () => {
             }
         },
 
+        currentViewPath() {
+            if (window.location.pathname.includes('table')) return 'table/';
+            if (window.location.pathname.includes('analyse')) return 'analyse/';
+            return 'map/';
+        },
+
         goToSelectedVorlage() {
             if (!this.selectedVorlage) return;
-            const view = window.location.pathname.includes('table') ? 'table' : 'map';
-            window.location.href = `/${this.selectedVorlage}/${view}/`;
+            window.location.href = `/${this.selectedVorlage}/${this.currentViewPath()}`;
         }
     }));
 });

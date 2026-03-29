@@ -1,17 +1,23 @@
 import polars as pl
+from typing import Literal
+
+from django.http import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from ninja import Router, Schema
+from ninja.errors import HttpError
 from ninja.pagination import paginate
 from ninja.security import django_auth
 
 from abst.geo import get_geo_id_list
-from abst.models import Abstimmungstag, Gemeinde, Kanton, Vorlage, Zaehlkreis
+from abst.models import Abstimmungstag, Gemeinde, Kanton, Partei, Vorlage, Zaehlkreis
 from abst.predict import predict_results, prepare_predict_data
 from abst.schema import (
     AbstimmungstagSchema,
     GemeindeResult,
     GemeindeSchema,
     KantonSchema,
+    ScatterOptionsSchema,
+    ScatterPointSchema,
     ResultsGemeindeSchema,
     ResultsKantonSchema,
     ResultsTotalSchema,
@@ -22,6 +28,7 @@ from abst.store import (
     get_abst_result_kantone,
     get_abst_result_total,
     get_abst_results,
+    get_scatterplot_data,
 )
 
 router = Router()
@@ -188,6 +195,177 @@ class SinglePredictionSchema(Schema):
 class TestPredictionResponseSchema(Schema):
     report: ResultPredictionReportSchema
     predictions: list[SinglePredictionSchema]
+
+
+def _scatter_metrics() -> list[dict[str, str]]:
+    return [
+        {"id": "ja_prozent", "name": "Abstimmungsresultat Ja in %"},
+        {"id": "stimmbeteiligung", "name": "Stimmbeteiligung in %"},
+        {"id": "anzahl_stimmberechtigte", "name": "Anzahl Stimmberechtigte"},
+        {"id": "wahlen_result", "name": "Wahlresultat"},
+        {"id": "abstimmung_result", "name": "Andere Abstimmung"},
+    ]
+
+
+def _scatter_scopes() -> list[dict[str, str]]:
+    return [
+        {"id": "partei", "name": "Partei"},
+        {"id": "parteigruppe", "name": "Parteigruppe"},
+        {"id": "lager", "name": "Parteipolitisches Lager"},
+    ]
+
+
+def _scatter_wahlen_options() -> tuple[
+    list[dict[str, int | str]],
+    list[dict[str, int | str]],
+    list[dict[str, int | str]],
+]:
+    parteien = [
+        {
+            "id": p.partei_id,
+            "name": p.kurzname or p.name,
+        }
+        for p in Partei.objects.all().order_by("name")
+    ]
+
+    parteigruppen = [
+        {
+            "id": int(g["parteigruppen_id"]),
+            "name": g["parteigruppen_name"],
+        }
+        for g in Partei.objects.exclude(parteigruppen_id=None)
+        .exclude(parteigruppen_name="")
+        .values("parteigruppen_id", "parteigruppen_name")
+        .distinct()
+        .order_by("parteigruppen_name")
+    ]
+
+    lager = [
+        {
+            "id": int(l["parteipolitische_lager_id"]),
+            "name": l["parteipolitische_lager_name"],
+        }
+        for l in Partei.objects.exclude(parteipolitische_lager_id=None)
+        .exclude(parteipolitische_lager_name="")
+        .values("parteipolitische_lager_id", "parteipolitische_lager_name")
+        .distinct()
+        .order_by("parteipolitische_lager_name")
+    ]
+
+    return parteien, parteigruppen, lager
+
+
+@router.get("{vorlage_id}/scatter/options", response=ScatterOptionsSchema)
+def get_scatter_options(request, vorlage_id: int):
+    parteien, parteigruppen, lager = _scatter_wahlen_options()
+    return {
+        "metrics": _scatter_metrics(),
+        "scopes": _scatter_scopes(),
+        "parteien": parteien,
+        "parteigruppen": parteigruppen,
+        "lager": lager,
+    }
+
+
+@router.get("{vorlage_id}/scatter/data", response=list[ScatterPointSchema])
+def get_scatter_data(
+    request,
+    vorlage_id: int,
+    x_metric: str = "ja_prozent",
+    y_metric: str = "stimmbeteiligung",
+    size_metric: str = "anzahl_stimmberechtigte",
+    wahlen_scope: Literal["partei", "parteigruppe", "lager"] = "partei",
+    wahlen_option_id: int | None = None,
+    wahlen_mode: Literal["current", "last", "diff"] = "current",
+    abstimmung_vorlage_id: int | None = None,
+    abstimmung_result_mode: Literal["ja_prozent",
+                                    "stimmbeteiligung"] = "ja_prozent",
+):
+    try:
+        df = get_scatterplot_data(
+            vorlage_id=vorlage_id,
+            x_metric=x_metric,
+            y_metric=y_metric,
+            size_metric=size_metric,
+            wahlen_scope=wahlen_scope,
+            wahlen_option_id=wahlen_option_id,
+            wahlen_mode=wahlen_mode,
+            abstimmung_vorlage_id=abstimmung_vorlage_id,
+            abstimmung_result_mode=abstimmung_result_mode,
+        )
+    except ValueError as exc:
+        raise HttpError(400, str(exc)) from exc
+
+    if df.is_empty():
+        return []
+
+    df = df.filter(
+        pl.col("x_value").is_not_null()
+        & pl.col("y_value").is_not_null()
+        & pl.col("size_value").is_not_null()
+    )
+
+    return df.to_dicts()
+
+
+@router.get("{vorlage_id}/scatter/export.xlsx")
+def export_scatter_xlsx(
+    request,
+    vorlage_id: int,
+    x_metric: str = "ja_prozent",
+    y_metric: str = "stimmbeteiligung",
+    size_metric: str = "anzahl_stimmberechtigte",
+    wahlen_scope: Literal["partei", "parteigruppe", "lager"] = "partei",
+    wahlen_option_id: int | None = None,
+    wahlen_mode: Literal["current", "last", "diff"] = "current",
+    abstimmung_vorlage_id: int | None = None,
+    abstimmung_result_mode: Literal["ja_prozent",
+                                    "stimmbeteiligung"] = "ja_prozent",
+):
+    try:
+        df = get_scatterplot_data(
+            vorlage_id=vorlage_id,
+            x_metric=x_metric,
+            y_metric=y_metric,
+            size_metric=size_metric,
+            wahlen_scope=wahlen_scope,
+            wahlen_option_id=wahlen_option_id,
+            wahlen_mode=wahlen_mode,
+            abstimmung_vorlage_id=abstimmung_vorlage_id,
+            abstimmung_result_mode=abstimmung_result_mode,
+        )
+    except ValueError as exc:
+        raise HttpError(400, str(exc)) from exc
+
+    if not df.is_empty():
+        df = df.filter(
+            pl.col("x_value").is_not_null()
+            & pl.col("y_value").is_not_null()
+            & pl.col("size_value").is_not_null()
+        )
+
+    import io
+
+    output = io.BytesIO()
+    export_df = df.rename(
+        {
+            "name": "gemeinde",
+            "x_value": "x_wert",
+            "y_value": "y_wert",
+            "size_value": "groesse_wert",
+        }
+    )
+    export_df.write_excel(workbook=output, worksheet="Scatterplot")
+    output.seek(0)
+
+    response = HttpResponse(
+        output.getvalue(),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="scatterplot_{vorlage_id}.xlsx"'
+    )
+    return response
 
 
 @router.post(
