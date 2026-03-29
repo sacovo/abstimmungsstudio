@@ -5,7 +5,15 @@ from unfold.admin import ModelAdmin
 from unfold.decorators import action
 
 from abst.geo import import_from_geojson
-from abst.models import Abstimmungstag, Gemeinde, GeoStand, Kanton, Vorlage, Zaehlkreis
+from abst.models import (
+    Abstimmungstag,
+    Gemeinde,
+    GeoStand,
+    Kanton,
+    Partei,
+    Vorlage,
+    Zaehlkreis,
+)
 from abst.store import fetch_and_store_eidg, fetch_and_store_kantonal
 
 
@@ -104,3 +112,15 @@ class KantonAdmin(ModelAdmin):
     list_display = ("name", "short", "lang_code", "stimmen")
 
     list_editable = ("short", "lang_code", "stimmen")
+
+
+@admin.register(Partei)
+class ParteiAdmin(ModelAdmin):
+    list_display = (
+        "partei_id",
+        "kurzname",
+        "name",
+        "parteigruppen_name",
+        "parteipolitische_lager_name",
+    )
+    search_fields = ("name", "kurzname", "partei_id")

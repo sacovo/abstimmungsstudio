@@ -35,7 +35,8 @@ def vorlage_map_view(request, vorlage_id):
         proxy_url = None
 
     return render(
-        request, "abst/vorlage_map.html", {"vorlage": vorlage, "geo_link": proxy_url}
+        request, "abst/vorlage_map.html", {
+            "vorlage": vorlage, "geo_link": proxy_url}
     )
 
 
@@ -48,8 +49,24 @@ def vorlage_compare_view(request, vorlage_id, other_id):
     vorlage = Vorlage.objects.get(vorlagen_id=vorlage_id)
     other = Vorlage.objects.get(vorlagen_id=other_id)
     return render(
-        request, "abst/vorlage_compare.html", {"vorlage": vorlage, "other": other}
+        request, "abst/vorlage_compare.html", {
+            "vorlage": vorlage, "other": other}
     )
+
+
+def wahlen_map_view(request):
+    latest_tag = Abstimmungstag.objects.order_by("-date").first()
+    geo_link = None
+
+    if latest_tag and latest_tag.stand and latest_tag.stand.document:
+        geo_link = latest_tag.stand.document.url
+
+    if geo_link:
+        proxy_url = f"/proxy-geodata/?url={urllib.parse.quote(geo_link)}"
+    else:
+        proxy_url = None
+
+    return render(request, "abst/wahlen_map.html", {"geo_link": proxy_url})
 
 
 def proxy_geodata_view(request):
@@ -58,7 +75,8 @@ def proxy_geodata_view(request):
         return HttpResponseNotFound("URL is required")
 
     try:
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        req = urllib.request.Request(
+            url, headers={"User-Agent": "Mozilla/5.0"})
         with urllib.request.urlopen(req) as response:
             return HttpResponse(
                 response.read(), content_type=response.headers.get("Content-Type")

@@ -11,11 +11,17 @@ from django.db import transaction
 from influxdb_client.client.influxdb_client import InfluxDBClient
 from influxdb_client.client.write_api import SYNCHRONOUS
 
-from abst.models import Abstimmungstag, Gemeinde, GeoStand, Kanton, Vorlage
+from abst.models import Abstimmungstag, Gemeinde, GeoStand, Kanton, Partei, Vorlage
 
 from .schema import GemeindeResult, Result, VorlageSchema
 
 BASE_URL = "https://ckan.opendata.swiss/api/3/action/package_show"
+WAHLEN_META_URL = (
+    "https://ogd-static.voteinfo-app.ch/v4/ogd/sd-t-17.02-NRW2023-metadaten.json"
+)
+WAHLEN_RESULTATE_URL = (
+    "https://ogd-static.voteinfo-app.ch/v4/ogd/sd-t-17.02-NRW2023-parteien.json"
+)
 
 
 def import_abst_meta(
@@ -51,7 +57,8 @@ def import_abst_kantonal_meta(
     for resource in data["result"]["resources"]:
         coverage_date = date.fromisoformat(resource["coverage"])
         url = resource["url"]
-        Abstimmungstag.objects.filter(date=coverage_date).update(url_kantonal=url)
+        Abstimmungstag.objects.filter(
+            date=coverage_date).update(url_kantonal=url)
 
 
 @contextmanager
@@ -103,6 +110,202 @@ def get_name(names, lang):
         if n["langKey"] == lang:
             return n["text"]
     return "Unknown"
+
+
+def get_localized_name(names: list[dict], lang: str = "de") -> str:
+    for name in names or []:
+        if name.get("langKey") == lang and name.get("text"):
+            return name["text"]
+    for name in names or []:
+        if name.get("text"):
+            return name["text"]
+    return "Unknown"
+
+
+def import_wahlen_metadata(
+    json_url: str = WAHLEN_META_URL, tag: Abstimmungstag | None = None
+) -> int:
+    data = requests.get(json_url).json()
+    parteien = data.get("parteien", [])
+
+    imported = 0
+    for partei in parteien:
+        partei_id = partei.get("partei_id")
+        if partei_id is None:
+            continue
+
+        Partei.objects.update_or_create(
+            partei_id=int(partei_id),
+            defaults={
+                "name": get_localized_name(partei.get("partei_bezeichnung", []), "de"),
+                "kurzname": get_localized_name(
+                    partei.get("partei_bezeichnung_kurz", []), "de"
+                ),
+                "parteigruppen_id": partei.get("parteigruppen_id"),
+                "parteigruppen_name": get_localized_name(
+                    partei.get("parteigruppen_bezeichnung", []), "de"
+                ),
+                "parteipolitische_lager_id": partei.get("parteipolitische_lager_id"),
+                "parteipolitische_lager_name": get_localized_name(
+                    partei.get("parteipolitische_lager_bezeichnung", []), "de"
+                ),
+                "tag": tag,
+            },
+        )
+        imported += 1
+
+    return imported
+
+
+def fetch_and_store_wahlen_results(json_url: str = WAHLEN_RESULTATE_URL) -> int:
+    data = requests.get(json_url).json()
+    rows = data.get("level_gemeinden", [])
+    if not rows:
+        return 0
+
+    timestamp = int(datetime.datetime.now().timestamp() * 1_000_000_000)
+    points = []
+
+    for row in rows:
+        geo_id = row.get("gemeinde_nummer")
+        partei_id = row.get("partei_id")
+        if geo_id is None or partei_id is None:
+            continue
+
+        points.append(
+            {
+                "measurement": "wahlen_result",
+                "tags": {
+                    "geo_id": int(geo_id),
+                    "partei_id": int(partei_id),
+                },
+                "fields": {
+                    "partei_staerke": float(row.get("partei_staerke") or 0.0),
+                    "letzte_wahl_partei_staerke": float(
+                        row.get("letzte_wahl_partei_staerke") or 0.0
+                    ),
+                    "differenz_partei_staerke": float(
+                        row.get("differenz_partei_staerke") or 0.0
+                    ),
+                },
+                "time": timestamp,
+            }
+        )
+
+    if not points:
+        return 0
+
+    with get_influx_client() as client:
+        write_api = client.write_api(write_options=SYNCHRONOUS)
+        write_api.write(bucket=settings.INFLUX_BUCKET, record=points)
+
+    return len(points)
+
+
+def get_wahlen_results(partei_id: int, mode: str = "current"):
+    field_map = {
+        "current": "partei_staerke",
+        "last": "letzte_wahl_partei_staerke",
+        "diff": "differenz_partei_staerke",
+    }
+    field_name = field_map.get(mode, "partei_staerke")
+
+    with get_influx_client() as client:
+        query_api = client.query_api()
+        query = f'''
+        from(bucket: "{settings.INFLUX_BUCKET}")
+          |> range(start: -100y)
+          |> filter(fn: (r) => r._measurement == "wahlen_result" and r.partei_id == "{partei_id}")
+          |> filter(fn: (r) => r._field == "{field_name}")
+          |> group(columns: ["geo_id", "_field"])
+          |> last()
+          |> pivot(rowKey:["geo_id"], columnKey: ["_field"], valueColumn: "_value")
+          |> sort(columns: ["geo_id"])
+        '''
+        result = query_api.query_data_frame(query)
+
+        if isinstance(result, list):
+            if len(result) == 0:
+                return None
+            result = pd.concat(result)
+
+        if len(result) == 0:
+            return None
+
+        df = pl.from_pandas(result)
+        if field_name not in df.columns:
+            return None
+
+        return df.with_columns(
+            geo_id=pl.col("geo_id").cast(pl.Int32),
+            value=pl.col(field_name).cast(pl.Float64),
+        ).select("geo_id", "value")
+
+
+def get_wahlen_results_multi(partei_ids: list[int], mode: str = "current"):
+    if not partei_ids:
+        return None
+
+    field_map = {
+        "current": "partei_staerke",
+        "last": "letzte_wahl_partei_staerke",
+        "diff": "differenz_partei_staerke",
+    }
+    field_name = field_map.get(mode, "partei_staerke")
+
+    id_filter = " or ".join([f'r.partei_id == "{pid}"' for pid in partei_ids])
+
+    with get_influx_client() as client:
+        query_api = client.query_api()
+        query = f'''
+        from(bucket: "{settings.INFLUX_BUCKET}")
+          |> range(start: -100y)
+          |> filter(fn: (r) => r._measurement == "wahlen_result")
+          |> filter(fn: (r) => {id_filter})
+          |> filter(fn: (r) => r._field == "{field_name}")
+          |> group(columns: ["geo_id", "partei_id", "_field"])
+          |> last()
+          |> group(columns: ["geo_id", "_field"])
+          |> sum()
+          |> pivot(rowKey:["geo_id"], columnKey: ["_field"], valueColumn: "_value")
+          |> sort(columns: ["geo_id"])
+        '''
+        result = query_api.query_data_frame(query)
+
+        if isinstance(result, list):
+            if len(result) == 0:
+                return None
+            result = pd.concat(result)
+
+        if len(result) == 0:
+            return None
+
+        df = pl.from_pandas(result)
+        if field_name not in df.columns:
+            return None
+
+        return df.with_columns(
+            geo_id=pl.col("geo_id").cast(pl.Int32),
+            value=pl.col(field_name).cast(pl.Float64),
+        ).select("geo_id", "value")
+
+
+def get_wahlen_results_parteigruppe(parteigruppen_id: int, mode: str = "current"):
+    partei_ids = list(
+        Partei.objects.filter(parteigruppen_id=parteigruppen_id).values_list(
+            "partei_id", flat=True
+        )
+    )
+    return get_wahlen_results_multi(partei_ids=partei_ids, mode=mode)
+
+
+def get_wahlen_results_lager(lager_id: int, mode: str = "current"):
+    partei_ids = list(
+        Partei.objects.filter(parteipolitische_lager_id=lager_id).values_list(
+            "partei_id", flat=True
+        )
+    )
+    return get_wahlen_results_multi(partei_ids=partei_ids, mode=mode)
 
 
 def import_tag(tag: Abstimmungstag):
@@ -161,7 +364,8 @@ def fetch_results_kantonal(
 
             vorlagen.append(
                 VorlageSchema(
-                    name=get_name(vorlage["vorlagenTitel"], k.lang_code if k else "de"),
+                    name=get_name(vorlage["vorlagenTitel"],
+                                  k.lang_code if k else "de"),
                     vorlagen_id=int(vorlage["vorlagenId"]),
                     has_zk=has_zk,
                     finished=vorlage["vorlageBeendet"],
@@ -286,11 +490,13 @@ def fetch_results_eidg(json_url) -> tuple[list[GemeindeResult], list[VorlageSche
                 finished=vorlage["vorlageBeendet"],
                 doppeltes_mehr=vorlage["doppeltesMehr"],
                 angenommen=vorlage["vorlageAngenommen"] or False,
-                ja_staende=(staende["jaStaendeGanz"] + 0.5 * staende["jaStaendeHalb"])
+                ja_staende=(staende["jaStaendeGanz"] +
+                            0.5 * staende["jaStaendeHalb"])
                 if staende["jaStaendeGanz"] is not None
                 else 0,
                 nein_staende=(
-                    staende["neinStaendeGanz"] + 0.5 * staende["neinStaendeHalb"]
+                    staende["neinStaendeGanz"] + 0.5 *
+                    staende["neinStaendeHalb"]
                 )
                 if staende["neinStaendeGanz"] is not None
                 else 0,
@@ -593,7 +799,8 @@ def get_vorlagen_table(vorlagen_ids: list[int]):
     if not vorlagen_ids:
         return pl.DataFrame()
 
-    id_filters = " or ".join([f'r.vorlage_id == "{v_id}"' for v_id in vorlagen_ids])
+    id_filters = " or ".join(
+        [f'r.vorlage_id == "{v_id}"' for v_id in vorlagen_ids])
 
     with get_influx_client(timeout=600000) as client:
         query_api = client.query_api()

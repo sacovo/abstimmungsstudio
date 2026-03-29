@@ -1,0 +1,104 @@
+{% extends 'abst/base.html' %}
+{% load static %}
+
+{% block title %}Wahlen 2023 - Karte{% endblock %}
+
+{% block nav %}
+{% include 'abst/includes/main_nav.html' %}
+{% endblock %}
+
+{% block content %}
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/topojson-client@3"></script>
+
+<div class="row map-layout" x-data="wahlenMapView('{{ geo_link }}')">
+    <article class="map col s12 m8 l9">
+        <h2>Wahlen 2023 - Parteienstaerke</h2>
+
+        <div class="wrapper">
+            <div class="row">
+                <div class="input-field col s12 m3">
+                    <select x-model="selectionType" @change="onSelectionTypeChange" x-ref="typeSelect">
+                        <option value="partei">Partei</option>
+                        <option value="gruppe">Parteigruppe</option>
+                        <option value="lager">Parteipolitisches Lager</option>
+                    </select>
+                    <label>Ebene</label>
+                </div>
+                <div class="input-field col s12 m5">
+                    <select x-model="selectedEntityId" @change="loadResults" x-ref="entitySelect">
+                        <template x-for="option in currentOptions()" :key="option.id">
+                            <option :value="String(option.id)" x-text="option.name"></option>
+                        </template>
+                    </select>
+                    <label x-text="selectionLabel()"></label>
+                </div>
+                <div class="input-field col s12 m2">
+                    <select x-model="mode" @change="loadResults" x-ref="modeSelect">
+                        <option value="current">Aktuelle Wahl</option>
+                        <option value="last">Letzte Wahl</option>
+                        <option value="diff">Differenz</option>
+                    </select>
+                    <label>Modus</label>
+                </div>
+                <div class="col s12 m2 right-align" style="margin-top: 20px;">
+                    <button class="btn-floating waves-effect waves-light green" @click="exportMap()" style="margin-right: 15px;"
+                        title="Karte herunterladen">
+                        <i class="material-symbols-outlined">download</i>
+                    </button>
+                    <button class="btn waves-effect waves-light blue lighten-3" @click="resetZoom()">Zoom zuruecksetzen</button>
+                </div>
+            </div>
+
+            <div id="map-container" style="width: 100%; height: 72vh; background-color: #040f2d; position: relative;">
+                <div x-show="loading"
+                    style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
+                    <div class="preloader-wrapper big active">
+                        <div class="spinner-layer spinner-blue-only">
+                            <div class="circle-clipper left"><div class="circle"></div></div>
+                            <div class="gap-patch"><div class="circle"></div></div>
+                            <div class="circle-clipper right"><div class="circle"></div></div>
+                        </div>
+                    </div>
+                </div>
+                <svg id="swiss-map" width="100%" height="100%"></svg>
+            </div>
+        </div>
+    </article>
+
+    <aside class="sidebar col s12 m4 l3">
+        <div class="card p-3">
+            <div class="card-content grey lighten-5">
+                <span class="card-title" x-text="selectedEntityName()"></span>
+                <p style="margin-bottom: 1rem;">
+                    Modus: <strong x-text="modeLabel()"></strong>
+                </p>
+
+                <template x-if="selectedGemeinde">
+                    <table class="striped results-table">
+                        <tbody>
+                            <tr>
+                                <th colspan="2" x-text="selectedGemeinde.name"></th>
+                            </tr>
+                            <tr>
+                                <td>Geo ID</td>
+                                <td class="right-align nr" x-text="selectedGemeinde.geo_id"></td>
+                            </tr>
+                            <tr>
+                                <td x-text="valueLabel()"></td>
+                                <td class="right-align nr" x-text="formatValue(selectedGemeinde.value)"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </template>
+
+                <template x-if="!selectedGemeinde">
+                    <p class="grey-text">Klicke auf eine Gemeinde, um Details zu sehen.</p>
+                </template>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script src="{% static 'abst/js/wahlen_map.js' %}"></script>
+{% endblock %}

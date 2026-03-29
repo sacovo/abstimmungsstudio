@@ -5,7 +5,7 @@ from ninja import Field
 from ninja.orm import ModelSchema
 from ninja.schema import Schema
 
-from abst.models import Abstimmungstag, Gemeinde, Kanton, Vorlage
+from abst.models import Abstimmungstag, Gemeinde, Kanton, Partei, Vorlage
 
 
 class Result(Schema):
@@ -135,3 +135,27 @@ class ResultsGemeindeSchema(Schema):
     ja_stimmen: int
     nein_stimmen: int
     stimmbeteiligung: float
+
+
+class ParteiSchema(ModelSchema):
+    class Meta:
+        model = Partei
+        fields = [
+            "partei_id",
+            "name",
+            "kurzname",
+            "parteigruppen_id",
+            "parteigruppen_name",
+            "parteipolitische_lager_id",
+            "parteipolitische_lager_name",
+        ]
+
+
+class ParteiGemeindeResultSchema(Schema):
+    geo_id: int
+    value: float
+
+
+class WahlenOptionSchema(Schema):
+    id: int
+    name: str

@@ -51,8 +51,10 @@ class Abstimmungstag(models.Model):
 
     stand = models.ForeignKey(GeoStand, on_delete=models.CASCADE)
 
-    projection = models.FileField(upload_to="projections/", blank=True, null=True)
-    projection_bet = models.FileField(upload_to="projections/", blank=True, null=True)
+    projection = models.FileField(
+        upload_to="projections/", blank=True, null=True)
+    projection_bet = models.FileField(
+        upload_to="projections/", blank=True, null=True)
 
     def __str__(self):
         return f"{self.name} ({self.date})"
@@ -99,3 +101,31 @@ class Kanton(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class Partei(models.Model):
+    partei_id = models.IntegerField(unique=True)
+    name = models.CharField(max_length=255)
+    kurzname = models.CharField(max_length=64, blank=True, default="")
+
+    parteigruppen_id = models.IntegerField(blank=True, null=True)
+    parteigruppen_name = models.CharField(
+        max_length=255, blank=True, default="")
+
+    parteipolitische_lager_id = models.IntegerField(blank=True, null=True)
+    parteipolitische_lager_name = models.CharField(
+        max_length=255, blank=True, default="")
+
+    tag = models.ForeignKey(
+        Abstimmungstag,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="parteien",
+    )
+
+    def __str__(self):
+        return self.kurzname or self.name
+
+    class Meta:
+        ordering = ["name"]

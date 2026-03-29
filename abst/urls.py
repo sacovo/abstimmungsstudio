@@ -6,6 +6,7 @@ app_name = "abst"
 
 urlpatterns = [
     path("vorlagen/", views.index_view, name="vorlagen"),
+    path("wahlen/map/", views.wahlen_map_view, name="wahlen_map"),
     path("<int:vorlage_id>/map/", views.vorlage_map_view, name="vorlage_map"),
     path("<int:vorlage_id>/table/", views.vorlage_table_view, name="vorlage_table"),
     path(
