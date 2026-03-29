@@ -165,6 +165,18 @@
                             </div>
                         </div>
 
+                        <div class="section">
+                            <h6 style="margin: 0.5rem 0; font-weight: 600;">Farben</h6>
+
+                            <div class="input-field">
+                                <select x-model="colorMetric" @change="loadData" x-ref="colorMetricSelect">
+                                    <template x-for="mode in colorModes" :key="mode.id">
+                                        <option :value="mode.id" x-text="mode.name"></option>
+                                    </template>
+                                </select>
+                                <label>Farbmodus</label>
+                            </div>
+                        </div>
 
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
                             <button class="btn waves-effect waves-light" @click="loadData()" :disabled="loading">

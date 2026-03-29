@@ -255,12 +255,27 @@ def _scatter_wahlen_options() -> tuple[
     return parteien, parteigruppen, lager
 
 
+def _scatter_color_modes():
+    base_modes = [
+        {"id": "solid", "name": "Feste Farbe"},
+        {"id": "canton", "name": "Nach Kanton"},
+    ]
+
+    color_metrics = _scatter_metrics()
+    for metric in color_metrics:
+        base_modes.append(
+            {"id": metric["id"], "name": f"Nach {metric['name']}"})
+
+    return base_modes
+
+
 @router.get("{vorlage_id}/scatter/options", response=ScatterOptionsSchema)
 def get_scatter_options(request, vorlage_id: int):
     parteien, parteigruppen, lager = _scatter_wahlen_options()
     return {
         "metrics": _scatter_metrics(),
         "scopes": _scatter_scopes(),
+        "color_modes": _scatter_color_modes(),
         "parteien": parteien,
         "parteigruppen": parteigruppen,
         "lager": lager,
@@ -274,6 +289,7 @@ def get_scatter_data(
     x_metric: str = "ja_prozent",
     y_metric: str = "stimmbeteiligung",
     size_metric: str = "anzahl_stimmberechtigte",
+    color_metric: str | None = None,
     wahlen_scope: Literal["partei", "parteigruppe", "lager"] = "partei",
     wahlen_option_id: int | None = None,
     wahlen_mode: Literal["current", "last", "diff"] = "current",
@@ -292,6 +308,7 @@ def get_scatter_data(
             wahlen_mode=wahlen_mode,
             abstimmung_vorlage_id=abstimmung_vorlage_id,
             abstimmung_result_mode=abstimmung_result_mode,
+            color_metric=color_metric,
         )
     except ValueError as exc:
         raise HttpError(400, str(exc)) from exc
@@ -315,6 +332,7 @@ def export_scatter_xlsx(
     x_metric: str = "ja_prozent",
     y_metric: str = "stimmbeteiligung",
     size_metric: str = "anzahl_stimmberechtigte",
+    color_metric: str | None = None,
     wahlen_scope: Literal["partei", "parteigruppe", "lager"] = "partei",
     wahlen_option_id: int | None = None,
     wahlen_mode: Literal["current", "last", "diff"] = "current",
@@ -333,6 +351,7 @@ def export_scatter_xlsx(
             wahlen_mode=wahlen_mode,
             abstimmung_vorlage_id=abstimmung_vorlage_id,
             abstimmung_result_mode=abstimmung_result_mode,
+            color_metric=color_metric,
         )
     except ValueError as exc:
         raise HttpError(400, str(exc)) from exc

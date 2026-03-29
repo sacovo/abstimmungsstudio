@@ -171,6 +171,11 @@ class ScatterScopeOptionSchema(Schema):
     name: str
 
 
+class ScatterColorModeSchema(Schema):
+    id: str
+    name: str
+
+
 class ScatterPointSchema(Schema):
     geo_id: int
     name: str
@@ -188,11 +193,13 @@ class ScatterPointSchema(Schema):
     x_value: float | None = None
     y_value: float | None = None
     size_value: float | None = None
+    color_value: float | str | None = None
 
 
 class ScatterOptionsSchema(Schema):
     metrics: list[ScatterMetricOptionSchema]
     scopes: list[ScatterScopeOptionSchema]
+    color_modes: list[ScatterColorModeSchema]
     parteien: list[WahlenOptionSchema]
     parteigruppen: list[WahlenOptionSchema]
     lager: list[WahlenOptionSchema]

@@ -7,6 +7,7 @@ document.addEventListener('alpine:init', () => {
 
         metrics: [],
         scopes: [],
+        colorModes: [],
         parteien: [],
         parteigruppen: [],
         lager: [],
@@ -15,6 +16,7 @@ document.addEventListener('alpine:init', () => {
         xMetric: 'ja_prozent',
         yMetric: 'stimmbeteiligung',
         sizeMetric: 'anzahl_stimmberechtigte',
+        colorMetric: 'canton',
         wahlenScope: 'partei',
         wahlenOptionId: '',
         wahlenMode: 'current',
@@ -36,6 +38,7 @@ document.addEventListener('alpine:init', () => {
 
                 this.metrics = options.metrics || [];
                 this.scopes = options.scopes || [];
+                this.colorModes = options.color_modes || [];
                 this.parteien = options.parteien || [];
                 this.parteigruppen = options.parteigruppen || [];
                 this.lager = options.lager || [];
@@ -156,6 +159,7 @@ document.addEventListener('alpine:init', () => {
                 x_metric: this.xMetric,
                 y_metric: this.yMetric,
                 size_metric: this.sizeMetric,
+                color_metric: this.colorMetric,
                 abstimmung_result_mode: this.abstimmungResultMode,
             });
 
@@ -261,63 +265,20 @@ document.addEventListener('alpine:init', () => {
             const sizeRaw = this.points.map((p) => p.size_value || 0);
             const sizes = this.scaledSizes(sizeRaw);
 
-            const cantonGroups = new Map();
-            this.points.forEach((point, idx) => {
-                const key = String(point.kanton_id);
-                if (!cantonGroups.has(key)) {
-                    cantonGroups.set(key, {
-                        kantonId: point.kanton_id,
-                        kantonName: point.kanton,
-                        points: [],
-                    });
-                }
-                cantonGroups.get(key).points.push({ point: point, size: sizes[idx] });
-            });
+            let traces = [];
 
-            const sortedGroups = Array.from(cantonGroups.values()).sort((a, b) => a.kantonId - b.kantonId);
-            const traces = sortedGroups.map((group, idx) => {
-                const color = this.cantonColor(group.kantonId);
-                const xs = [];
-                const ys = [];
-                const markerSizes = [];
-                const hoverText = [];
+            if (this.colorMetric === 'canton') {
+                // Mode 1: Canton-based colors (one trace per canton)
+                traces = this.renderCantonTraces(sizes);
+            } else if (this.colorMetric === 'solid') {
+                // Mode 2: Solid color (all points in one trace)
+                traces = [this.renderSolidTrace(sizes)];
+            } else {
+                // Mode 3: Metric-based color scale (all points in one trace with color scale)
+                traces = [this.renderMetricTraces(sizes)];
+            }
 
-                group.points.forEach((entry) => {
-                    const p = entry.point;
-                    xs.push(p.x_value);
-                    ys.push(p.y_value);
-                    markerSizes.push(entry.size);
-
-                    const wahlen = p.wahlen_value == null ? '-' : `${p.wahlen_value.toFixed(2)}%`;
-                    const abstimmung = p.abstimmung_value == null ? '-' : `${p.abstimmung_value.toFixed(2)}%`;
-                    hoverText.push(
-                        `${p.name} (${p.kanton})<br>` +
-                        `Status: ${p.status}<br>` +
-                        `Ja: ${p.ja_prozent.toFixed(2)}%<br>` +
-                        `Beteiligung: ${p.stimmbeteiligung.toFixed(2)}%<br>` +
-                        `Stimmberechtigte: ${p.anzahl_stimmberechtigte.toLocaleString('de-CH')}<br>` +
-                        `Wahlresultat: ${wahlen}<br>` +
-                        `Vergleichsabstimmung: ${abstimmung}`
-                    );
-                });
-
-                return {
-                    type: 'scattergl',
-                    mode: 'markers',
-                    name: `${group.kantonName} (${group.kantonId})`,
-                    x: xs,
-                    y: ys,
-                    text: hoverText,
-                    hovertemplate: '%{text}<extra></extra>',
-                    marker: {
-                        size: markerSizes,
-                        color: color,
-                        opacity: 0.78,
-                        line: { width: 0.5, color: '#213547' },
-                    },
-                };
-            });
-
+            const legendTitle = this.colorMetric === 'canton' ? 'Kanton' : this.colorMetricLabel();
             const layout = {
                 title: {
                     text: `${this.metricName(this.xMetric)} vs ${this.metricName(this.yMetric)}`,
@@ -337,7 +298,7 @@ document.addEventListener('alpine:init', () => {
                     gridcolor: '#d8dee8',
                 },
                 legend: {
-                    title: { text: 'Kanton' },
+                    title: { text: legendTitle },
                 },
                 hovermode: 'closest',
             };
@@ -349,6 +310,144 @@ document.addEventListener('alpine:init', () => {
             };
 
             Plotly.newPlot('scatterplot', traces, layout, config);
+        },
+
+        renderCantonTraces(sizes) {
+            const cantonGroups = new Map();
+            this.points.forEach((point, idx) => {
+                const key = String(point.kanton_id);
+                if (!cantonGroups.has(key)) {
+                    cantonGroups.set(key, {
+                        kantonId: point.kanton_id,
+                        kantonName: point.kanton,
+                        points: [],
+                    });
+                }
+                cantonGroups.get(key).points.push({ point: point, size: sizes[idx] });
+            });
+
+            const sortedGroups = Array.from(cantonGroups.values()).sort((a, b) => a.kantonId - b.kantonId);
+            return sortedGroups.map((group) => {
+                const color = this.cantonColor(group.kantonId);
+                const xs = [];
+                const ys = [];
+                const markerSizes = [];
+                const hoverText = [];
+
+                group.points.forEach((entry) => {
+                    const p = entry.point;
+                    xs.push(p.x_value);
+                    ys.push(p.y_value);
+                    markerSizes.push(entry.size);
+                    hoverText.push(this.buildHoverText(p));
+                });
+
+                return {
+                    type: 'scattergl',
+                    mode: 'markers',
+                    name: `${group.kantonName} (${group.kantonId})`,
+                    x: xs,
+                    y: ys,
+                    text: hoverText,
+                    hovertemplate: '%{text}<extra></extra>',
+                    marker: {
+                        size: markerSizes,
+                        color: color,
+                        opacity: 0.78,
+                        line: { width: 0.5, color: '#213547' },
+                    },
+                };
+            });
+        },
+
+        renderSolidTrace(sizes) {
+            const xs = [];
+            const ys = [];
+            const hoverText = [];
+
+            this.points.forEach((p, idx) => {
+                xs.push(p.x_value);
+                ys.push(p.y_value);
+                hoverText.push(this.buildHoverText(p));
+            });
+
+            return {
+                type: 'scattergl',
+                mode: 'markers',
+                name: 'Gemeinden',
+                x: xs,
+                y: ys,
+                text: hoverText,
+                hovertemplate: '%{text}<extra></extra>',
+                marker: {
+                    size: sizes,
+                    color: '#7e8ba3',
+                    opacity: 0.78,
+                    line: { width: 0.5, color: '#213547' },
+                },
+            };
+        },
+
+        renderMetricTraces(sizes) {
+            const xs = [];
+            const ys = [];
+            const colors = [];
+            const hoverText = [];
+
+            this.points.forEach((p) => {
+                xs.push(p.x_value);
+                ys.push(p.y_value);
+                colors.push(p.color_value !== null ? p.color_value : 0);
+                hoverText.push(this.buildHoverText(p));
+            });
+
+            const colorScale = [
+                [0, '#d73027'],      // Red for low values
+                [0.25, '#fc8d59'],   // Orange
+                [0.5, '#fee090'],    // Yellow
+                [0.75, '#91bfdb'],   // Light blue
+                [1, '#4575b4'],      // Dark blue for high values
+            ];
+
+            return {
+                type: 'scattergl',
+                mode: 'markers',
+                name: 'Gemeinden',
+                x: xs,
+                y: ys,
+                text: hoverText,
+                hovertemplate: '%{text}<extra></extra>',
+                marker: {
+                    size: sizes,
+                    color: colors,
+                    colorscale: colorScale,
+                    showscale: true,
+                    colorbar: {
+                        title: this.colorMetricLabel(),
+                    },
+                    opacity: 0.78,
+                    line: { width: 0.5, color: '#213547' },
+                },
+            };
+        },
+
+        buildHoverText(p) {
+            const wahlen = p.wahlen_value == null ? '-' : `${p.wahlen_value.toFixed(2)}%`;
+            const abstimmung = p.abstimmung_value == null ? '-' : `${p.abstimmung_value.toFixed(2)}%`;
+            return (
+                `${p.name} (${p.kanton})<br>` +
+                `Status: ${p.status}<br>` +
+                `Ja: ${p.ja_prozent.toFixed(2)}%<br>` +
+                `Beteiligung: ${p.stimmbeteiligung.toFixed(2)}%<br>` +
+                `Stimmberechtigte: ${p.anzahl_stimmberechtigte.toLocaleString('de-CH')}<br>` +
+                `Wahlresultat: ${wahlen}<br>` +
+                `Vergleichsabstimmung: ${abstimmung}`
+            );
+        },
+
+        colorMetricLabel() {
+            const mode = this.colorModes.find(m => m.id === this.colorMetric);
+            return mode ? mode.name : this.colorMetric;
         },
 
         downloadPng() {

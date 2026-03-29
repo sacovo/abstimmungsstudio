@@ -335,6 +335,7 @@ def _empty_scatter_df() -> pl.DataFrame:
             "x_value": pl.Float64,
             "y_value": pl.Float64,
             "size_value": pl.Float64,
+            "color_value": pl.Float64,
         }
     )
 
@@ -399,8 +400,12 @@ def get_scatterplot_data(
     abstimmung_vorlage_id: int | None = None,
     abstimmung_result_mode: Literal["ja_prozent",
                                     "stimmbeteiligung"] = "ja_prozent",
+    color_metric: str | None = None,
 ) -> pl.DataFrame:
     metrics = {x_metric, y_metric, size_metric}
+    if color_metric and color_metric not in ("canton", "solid"):
+        metrics.add(color_metric)
+    
     invalid = metrics - SCATTER_ALLOWED_METRICS
     if invalid:
         raise ValueError(f"Ungueltige Metrik: {', '.join(sorted(invalid))}")
@@ -418,7 +423,7 @@ def get_scatterplot_data(
     cache_key = (
         f"scatter:{vorlage_id}:{x_metric}:{y_metric}:{size_metric}:"
         f"{wahlen_scope}:{wahlen_option_id}:{wahlen_mode}:"
-        f"{abstimmung_vorlage_id}:{abstimmung_result_mode}"
+        f"{abstimmung_vorlage_id}:{abstimmung_result_mode}:{color_metric}"
     )
     cached_rows = cache.get(cache_key)
     if cached_rows is not None:
@@ -489,7 +494,19 @@ def get_scatterplot_data(
         metric_to_expr[x_metric].alias("x_value"),
         metric_to_expr[y_metric].alias("y_value"),
         metric_to_expr[size_metric].alias("size_value"),
-    ).select(
+    )
+
+    # Handle color_value
+    if color_metric == "canton":
+        result = result.with_columns(pl.col("kanton_id").cast(pl.Float64).alias("color_value"))
+    elif color_metric == "solid":
+        result = result.with_columns(pl.lit(None).cast(pl.Float64).alias("color_value"))
+    elif color_metric and color_metric in metric_to_expr:
+        result = result.with_columns(metric_to_expr[color_metric].alias("color_value"))
+    else:
+        result = result.with_columns(pl.lit(None).cast(pl.Float64).alias("color_value"))
+
+    result = result.select(
         "geo_id",
         "name",
         "kanton",
@@ -503,6 +520,7 @@ def get_scatterplot_data(
         "x_value",
         "y_value",
         "size_value",
+        "color_value",
     ).sort("geo_id")
 
     cache.set(cache_key, result.to_dicts(), timeout=120)
