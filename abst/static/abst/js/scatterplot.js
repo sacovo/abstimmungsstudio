@@ -135,6 +135,9 @@ document.addEventListener('alpine:init', () => {
         },
 
         onAbstimmungSearchInput() {
+            // Zurücksetzen der Auswahl, wenn sich die Suche ändert
+            this.abstimmungVorlageId = '';
+            
             if (this.abstimmungSearchTimer) {
                 clearTimeout(this.abstimmungSearchTimer);
             }
