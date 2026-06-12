@@ -397,12 +397,129 @@ document.addEventListener('alpine:init', () => {
                 const pngUrl = canvas.toDataURL('image/png');
                 const downloadLink = document.createElement('a');
                 downloadLink.href = pngUrl;
-                downloadLink.download = `wahlen_karte_${this.selectionType}_${this.selectedEntityId}_${this.mode}.png`;
+                const timestamp = new Date().toISOString().replace('T', '_').replace(/\..+/, '').replace(/:/g, '-');
+                downloadLink.download = `wahlen_karte_${this.selectionType}_${this.selectedEntityId}_${this.mode}_${timestamp}.png`;
                 document.body.appendChild(downloadLink);
                 downloadLink.click();
                 document.body.removeChild(downloadLink);
             };
             img.src = url;
+        },
+
+        async exportTable() {
+            // 1. Create canvas
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            
+            // 2. Define dimensions (logical size)
+            const width = 800;
+            const height = 500;
+            
+            const scaleFactor = 2;
+            canvas.width = width * scaleFactor;
+            canvas.height = height * scaleFactor;
+            
+            // Enable high quality image smoothing to prevent artifacts
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            
+            ctx.scale(scaleFactor, scaleFactor);
+            
+            // 3. Background
+            ctx.fillStyle = "#040f2d";
+            ctx.fillRect(0, 0, width, height);
+            
+            // 4. Draw Header/Title
+            const title = `Wahlen 2023 - ${this.selectedEntityName()} (${this.modeLabel()})`;
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 26px 'Bricolage Grotesque', sans-serif";
+            ctx.textBaseline = "top";
+            ctx.textAlign = "left";
+            
+            // Wrap title if it's too long
+            const maxTitleWidth = width - 80;
+            const words = title.split(" ");
+            let line = "";
+            let y = 40;
+            const lineHeight = 34;
+            
+            for (let n = 0; n < words.length; n++) {
+                let testLine = line + words[n] + " ";
+                let metrics = ctx.measureText(testLine);
+                let testWidth = metrics.width;
+                if (testWidth > maxTitleWidth && n > 0) {
+                    ctx.fillText(line, 40, y);
+                    line = words[n] + " ";
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, 40, y);
+            y += lineHeight + 20;
+            
+            // Helper function to draw table row
+            const drawRow = (label, colVal, yPos) => {
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "16px 'Public Sans', sans-serif";
+                ctx.fillText(label, 40, yPos);
+                
+                ctx.textAlign = "right";
+                ctx.font = "16px 'Roboto Mono', monospace";
+                ctx.fillText(colVal, width - 40, yPos);
+                ctx.textAlign = "left";
+                
+                // Underline row
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(40, yPos + 26);
+                ctx.lineTo(width - 40, yPos + 26);
+                ctx.stroke();
+            };
+            
+            // 5. Draw Content
+            if (this.selectedGemeinde) {
+                ctx.fillStyle = "#90caf9";
+                ctx.font = "600 18px 'Public Sans', sans-serif";
+                ctx.fillText(`Gemeinde: ${this.selectedGemeinde.name}`, 40, y);
+                y += 40;
+                
+                drawRow("Geo ID", String(this.selectedGemeinde.geo_id), y); y += 36;
+                drawRow(this.valueLabel(), this.formatValue(this.selectedGemeinde.value), y); y += 36;
+            } else {
+                ctx.fillStyle = "#a0aec0";
+                ctx.font = "16px 'Public Sans', sans-serif";
+                ctx.fillText("Klicke auf eine Gemeinde, um Details anzuzeigen.", 40, y);
+            }
+            
+            // 6. Load and Draw Logo in the bottom right corner
+            try {
+                const logoImg = new Image();
+                logoImg.src = "/static/abst/imgs/logo.png";
+                await new Promise((resolve, reject) => {
+                    logoImg.onload = resolve;
+                    logoImg.onerror = reject;
+                });
+                // Draw logo at the bottom right with aspect ratio preserved
+                const targetHeight = 35;
+                const aspect = logoImg.naturalWidth / logoImg.naturalHeight || logoImg.width / logoImg.height || 5;
+                const logoW = targetHeight * aspect;
+                const logoH = targetHeight;
+                ctx.drawImage(logoImg, width - logoW - 40, height - logoH - 30, logoW, logoH);
+            } catch (error) {
+                console.error("Fehler beim Zeichnen des Logos auf dem Canvas:", error);
+            }
+            
+            // 7. Download PNG
+            const pngUrl = canvas.toDataURL("image/png");
+            const downloadLink = document.createElement("a");
+            downloadLink.href = pngUrl;
+            const timestamp = new Date().toISOString().replace('T', '_').replace(/\..+/, '').replace(/:/g, '-');
+            downloadLink.download = `wahlen_tabelle_${this.selectionType}_${this.selectedEntityId}_${this.mode}_${timestamp}.png`;
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
         },
     }));
 });

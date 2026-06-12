@@ -322,7 +322,6 @@ table.inside tr {
     color: var(--highlight-color);
     line-height: 1;
     font-weight: bold;
-    rotate: -12deg;
     text-shadow: var(--black) 3px 3px 2px;
     right: -4px;
     bottom: 3px;

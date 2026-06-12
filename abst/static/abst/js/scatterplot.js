@@ -24,12 +24,46 @@ document.addEventListener('alpine:init', () => {
         abstimmungResultMode: 'ja_prozent',
         abstimmungSearch: '',
         abstimmungSearchTimer: null,
+        logoBase64: '',
 
         async init() {
             this.loading = true;
             this.error = '';
 
             try {
+                // Preload logo as base64 to embed in the Plotly layout for offline export
+                try {
+                    const logoResponse = await fetch("/static/abst/imgs/logo.png");
+                    const logoBlob = await logoResponse.blob();
+                    const rawBase64 = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.readAsDataURL(logoBlob);
+                    });
+                    
+                    // Downscale the logo using a temporary canvas to prevent aliasing/pixelation
+                    const tempImg = new Image();
+                    tempImg.src = rawBase64;
+                    await new Promise((resolve) => tempImg.onload = resolve);
+                    
+                    const tempCanvas = document.createElement("canvas");
+                    const tempCtx = tempCanvas.getContext("2d");
+                    const targetW = 300;
+                    const aspect = tempImg.naturalWidth / tempImg.naturalHeight || tempImg.width / tempImg.height || 5;
+                    const targetH = targetW / aspect;
+                    
+                    tempCanvas.width = targetW;
+                    tempCanvas.height = targetH;
+                    
+                    tempCtx.imageSmoothingEnabled = true;
+                    tempCtx.imageSmoothingQuality = "high";
+                    tempCtx.drawImage(tempImg, 0, 0, targetW, targetH);
+                    
+                    this.logoBase64 = tempCanvas.toDataURL("image/png");
+                } catch (logoErr) {
+                    console.error("Fehler beim Laden des Logos für Plotly:", logoErr);
+                }
+
                 const res = await fetch(`/api/abst/${this.vorlageId}/scatter/options`);
                 if (!res.ok) {
                     throw new Error('Optionen konnten nicht geladen werden.');
@@ -281,30 +315,67 @@ document.addEventListener('alpine:init', () => {
                 traces = [this.renderMetricTraces(sizes)];
             }
 
+            const h4Element = document.querySelector('article h4');
+            const voteName = h4Element ? h4Element.innerText.replace(" - Scatterplot Analyse", "").trim() : "";
+            const mainTitle = `${this.metricName(this.xMetric)} vs ${this.metricName(this.yMetric)}`;
+            const plotTitle = voteName 
+                ? `${mainTitle}<br><span style="font-size: 22px; font-weight: normal; color: #90caf9;">${voteName}</span>` 
+                : mainTitle;
+
             const legendTitle = this.colorMetric === 'canton' ? 'Kanton' : this.colorMetricLabel();
             const layout = {
                 title: {
-                    text: `${this.metricName(this.xMetric)} vs ${this.metricName(this.yMetric)}`,
+                    text: plotTitle,
                     x: 0.01,
+                    y: 0.96,
+                    yanchor: 'top',
+                    font: { color: '#ffffff', size: 34 }
                 },
-                margin: { l: 65, r: 25, t: 60, b: 65 },
-                paper_bgcolor: '#f5f7fa',
+                margin: { l: 65, r: 100, t: 110, b: 90 },
+                paper_bgcolor: '#040f2d',
                 plot_bgcolor: '#eef2f7',
                 xaxis: {
-                    title: this.metricName(this.xMetric),
+                    title: {
+                        text: this.metricName(this.xMetric),
+                        font: { color: '#ffffff', size: 20 }
+                    },
+                    tickfont: { color: '#a0aec0', size: 16 },
                     zeroline: false,
                     gridcolor: '#d8dee8',
                 },
                 yaxis: {
-                    title: this.metricName(this.yMetric),
+                    title: {
+                        text: this.metricName(this.yMetric),
+                        font: { color: '#ffffff', size: 20 }
+                    },
+                    tickfont: { color: '#a0aec0', size: 16 },
                     zeroline: false,
                     gridcolor: '#d8dee8',
                 },
                 legend: {
-                    title: { text: legendTitle },
+                    title: {
+                        text: legendTitle,
+                        font: { color: '#ffffff', size: 18 }
+                    },
+                    font: { color: '#ffffff', size: 16 }
                 },
                 hovermode: 'closest',
             };
+
+            if (this.logoBase64) {
+                layout.images = [{
+                    source: this.logoBase64,
+                    xref: "paper",
+                    yref: "paper",
+                    x: 1.16,
+                    y: -0.07,
+                    sizex: 0.15,
+                    sizey: 0.06,
+                    xanchor: "right",
+                    yanchor: "bottom",
+                    sizing: "contain"
+                }];
+            }
 
             const config = {
                 responsive: true,
@@ -454,11 +525,12 @@ document.addEventListener('alpine:init', () => {
         },
 
         downloadPng() {
+            const timestamp = new Date().toISOString().replace('T', '_').replace(/\..+/, '').replace(/:/g, '-');
             Plotly.downloadImage('scatterplot', {
                 format: 'png',
                 width: 1920,
                 height: 1080,
-                filename: `scatterplot_${this.vorlageId}_${this.xMetric}_${this.yMetric}`,
+                filename: `scatterplot_${this.vorlageId}_${this.xMetric}_${this.yMetric}_${timestamp}`,
             });
         },
 

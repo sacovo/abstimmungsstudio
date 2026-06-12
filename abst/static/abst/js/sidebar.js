@@ -10,6 +10,7 @@ document.addEventListener('alpine:init', () => {
         nationalChart: null,
         gemeindeChart: null,
 
+        vorlageId,
         vorlageRegion,
 
         cantons: [],
@@ -423,6 +424,315 @@ document.addEventListener('alpine:init', () => {
             return stimmen;
         },
 
+        async exportTable() {
+            // 1. Create canvas
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            
+            // 2. Determine active view
+            const isCantonTabActive = this.vorlageRegion === 'CH' && document.querySelector('#cantons-table')?.style.display !== 'none';
+            const isGemeindeActive = !!this.selectedGemeinde;
+            
+            // 3. Define canvas dimensions (logical size)
+            const width = 800;
+            let height = 700;
+            if (isGemeindeActive) {
+                height = 550;
+            } else if (isCantonTabActive) {
+                height = 1400; // Plenty of room for 26 cantons plus headers/titles
+            } else if (this.hasPrediction) {
+                height = 800;
+            }
+            
+            const scaleFactor = 2;
+            canvas.width = width * scaleFactor;
+            canvas.height = height * scaleFactor;
+            
+            // Enable high quality image smoothing to prevent artifacts
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
+            
+            ctx.scale(scaleFactor, scaleFactor);
+            
+            // 4. Fill background
+            ctx.fillStyle = "#040f2d";
+            ctx.fillRect(0, 0, width, height);
+            
+            // 5. Draw Header/Title
+            const voteTitle = document.querySelector('article.map h2')?.innerText || "Abstimmung";
+            ctx.fillStyle = "#ffffff";
+            ctx.font = "bold 26px 'Bricolage Grotesque', sans-serif";
+            ctx.textBaseline = "top";
+            ctx.textAlign = "left";
+            
+            // Wrap title if it's too long
+            const maxTitleWidth = width - 80;
+            const words = voteTitle.split(" ");
+            let line = "";
+            let y = 40;
+            const lineHeight = 34;
+            
+            for (let n = 0; n < words.length; n++) {
+                let testLine = line + words[n] + " ";
+                let metrics = ctx.measureText(testLine);
+                let testWidth = metrics.width;
+                if (testWidth > maxTitleWidth && n > 0) {
+                    ctx.fillText(line, 40, y);
+                    line = words[n] + " ";
+                    y += lineHeight;
+                } else {
+                    line = testLine;
+                }
+            }
+            ctx.fillText(line, 40, y);
+            y += lineHeight + 10;
+            
+            // Draw Subtitle / Region
+            ctx.fillStyle = "#90caf9";
+            ctx.font = "600 18px 'Public Sans', sans-serif";
+            let regionText = this.vorlageRegion === 'CH' ? "Schweiz" : this.vorlageRegion;
+            if (isGemeindeActive) {
+                regionText += ` - Gemeinde: ${this.selectedGemeinde}`;
+            } else if (isCantonTabActive) {
+                regionText += " - Kantonsübersicht";
+            }
+            ctx.fillText(regionText, 40, y);
+            y += 40;
+            
+            // Helper function to draw table row
+            const drawRow = (label, col1, col2, yPos, isHeader = false) => {
+                ctx.fillStyle = isHeader ? "#a0aec0" : "#ffffff";
+                ctx.font = isHeader ? "bold 16px 'Public Sans', sans-serif" : "16px 'Public Sans', sans-serif";
+                ctx.fillText(label, 40, yPos);
+                
+                ctx.textAlign = "right";
+                if (col1 !== null) {
+                    ctx.fillText(col1, width - 200, yPos);
+                }
+                if (col2 !== null) {
+                    ctx.fillStyle = isHeader ? "#a0aec0" : "#a0aec0";
+                    ctx.fillText(col2, width - 40, yPos);
+                }
+                ctx.textAlign = "left";
+                
+                // Underline row
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(40, yPos + 26);
+                ctx.lineTo(width - 40, yPos + 26);
+                ctx.stroke();
+            };
+
+            const fillRoundRect = (x, y, w, h, r) => {
+                ctx.beginPath();
+                if (ctx.roundRect) {
+                    ctx.roundRect(x, y, w, h, r);
+                } else {
+                    ctx.rect(x, y, w, h);
+                }
+                ctx.fill();
+            };
+            
+            // Helper function to draw progress bar
+            const drawProgressBar = (bar, yPos) => {
+                const barWidth = width - 80;
+                const barHeight = 16;
+                const xPos = 40;
+                
+                // Draw rounded background container
+                ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+                fillRoundRect(xPos, yPos, barWidth, barHeight, 4);
+                
+                // Segments
+                const jaBase = parseFloat(bar.jaBasePct) || 0;
+                const jaPred = parseFloat(bar.jaPredPct) || 0;
+                const neinPred = parseFloat(bar.neinPredPct) || 0;
+                const neinBase = parseFloat(bar.neinBasePct) || 0;
+                
+                let currentX = xPos;
+                
+                // Draw function for individual segment
+                const drawSegment = (pct, color) => {
+                    if (pct <= 0) return;
+                    const w = (pct / 100) * barWidth;
+                    ctx.fillStyle = color;
+                    ctx.fillRect(currentX, yPos, w, barHeight);
+                    currentX += w;
+                };
+                
+                drawSegment(jaBase, "#0b12cd"); // Ja (Ausgezählt) - Dark Blue
+                drawSegment(jaPred, "#90caf9"); // Ja (Hochrechnung) - Light Blue
+                drawSegment(neinPred, "#ef9a9a"); // Nein (Hochrechnung) - Light Red
+                drawSegment(neinBase, "#e53935"); // Nein (Ausgezählt) - Red
+                
+                // Draw 50% marker
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(xPos + barWidth / 2 - 1, yPos - 2, 2, barHeight + 4);
+            };
+            
+            // 6. Draw Content depending on active view
+            if (isGemeindeActive) {
+                // Gemeinde Results
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 20px 'Bricolage Grotesque', sans-serif";
+                ctx.fillText("Gemeindeergebnis", 40, y);
+                y += 40;
+                
+                const res = this.gemeindeResult || {};
+                drawRow("Status", res.status || "", null, y); y += 36;
+                drawRow("Ja", res.ja_pct || "0%", res.ja || "0", y); y += 36;
+                drawRow("Nein", res.nein_pct || "0%", res.nein || "0", y); y += 36;
+                drawRow("Beteiligung", res.beteiligung || "0%", null, y); y += 36;
+                
+            } else if (isCantonTabActive) {
+                // Cantons Table
+                // Header
+                ctx.fillStyle = "#a0aec0";
+                ctx.font = "bold 16px 'Public Sans', sans-serif";
+                ctx.fillText("Kt.", 40, y);
+                ctx.textAlign = "right";
+                ctx.fillText("Aus.", width - 360, y);
+                ctx.fillText("Pro.", width - 190, y);
+                ctx.fillText("Stand", width - 40, y);
+                ctx.textAlign = "left";
+                
+                ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+                ctx.beginPath();
+                ctx.moveTo(40, y + 26);
+                ctx.lineTo(width - 40, y + 26);
+                ctx.stroke();
+                y += 36;
+                
+                this.cantons.forEach(canton => {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = (canton.jaProjectedPct > 50) ? "bold 16px 'Public Sans', sans-serif" : "16px 'Public Sans', sans-serif";
+                    ctx.fillText(canton.code, 40, y);
+                    
+                    ctx.textAlign = "right";
+                    ctx.font = "16px 'Roboto Mono', monospace";
+                    ctx.fillText(this.fmtPct(canton.jaFinalPct), width - 360, y);
+                    ctx.fillText(this.fmtPct(canton.jaProjectedPct), width - 190, y);
+                    ctx.fillText(String(canton.stimmen), width - 40, y);
+                    ctx.textAlign = "left";
+                    
+                    // Draw canton mini-bar below row
+                    const cBar = this.getCantonBar(canton);
+                    const barWidth = width - 80;
+                    const barHeight = 4;
+                    const barY = y + 22;
+                    
+                    // Segments
+                    const jaBase = parseFloat(cBar.jaBasePct) || 0;
+                    const jaPred = parseFloat(cBar.jaPredPct) || 0;
+                    const neinPred = parseFloat(cBar.neinPredPct) || 0;
+                    const neinBase = parseFloat(cBar.neinBasePct) || 0;
+                    
+                    let currentX = 40;
+                    const drawMiniSegment = (pct, color) => {
+                        if (pct <= 0) return;
+                        const w = (pct / 100) * barWidth;
+                        ctx.fillStyle = color;
+                        ctx.fillRect(currentX, barY, w, barHeight);
+                        currentX += w;
+                    };
+                    drawMiniSegment(jaBase, "#0b12cd");
+                    drawMiniSegment(jaPred, "#90caf9");
+                    drawMiniSegment(neinPred, "#ef9a9a");
+                    drawMiniSegment(neinBase, "#e53935");
+                    
+                    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+                    ctx.beginPath();
+                    ctx.moveTo(40, y + 28);
+                    ctx.lineTo(width - 40, y + 28);
+                    ctx.stroke();
+                    
+                    y += 36;
+                });
+                
+            } else {
+                // National / Region Table
+                // Draw result progress bar
+                const bar = this.getNationalBar();
+                drawProgressBar(bar, y);
+                y += 40;
+                
+                if (this.hasPrediction) {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = "bold 20px 'Bricolage Grotesque', sans-serif";
+                    ctx.fillText("Hochrechnung", 40, y);
+                    y += 36;
+                    
+                    drawRow("Ja", this.projection.ja_pct, this.projection.ja, y); y += 36;
+                    drawRow("Nein", this.projection.nein_pct, this.projection.nein, y); y += 36;
+                    drawRow("Beteiligung", this.projection.beteiligung, null, y); y += 46;
+                }
+                
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "bold 20px 'Bricolage Grotesque', sans-serif";
+                ctx.fillText("Ausgezählt", 40, y);
+                y += 36;
+                
+                drawRow("Ja", this.final.ja_pct, this.final.ja, y); y += 36;
+                drawRow("Nein", this.final.nein_pct, this.final.nein, y); y += 36;
+                drawRow("Beteiligung", this.final.beteiligung, null, y); y += 46;
+                
+                // Draw Standesstimmen if CH
+                if (this.vorlageRegion === 'CH') {
+                    ctx.fillStyle = "#ffffff";
+                    ctx.font = "bold 20px 'Bricolage Grotesque', sans-serif";
+                    ctx.fillText("Standesstimmen", 40, y);
+                    ctx.textAlign = "right";
+                    ctx.fillText(`${(this.standesStimmen / 2).toFixed(1).replace('.0', '')} / ${(this.totalStandesStimmen / 2).toFixed(1).replace('.0', '')}`, width - 40, y);
+                    ctx.textAlign = "left";
+                    y += 30;
+                    
+                    // Draw circles / squares for standesstimmen (staende)
+                    const maxContentWidth = width - 80;
+                    const N = this.staende.length;
+                    const gap = 3;
+                    const indicatorWidth = Math.floor((maxContentWidth - (N - 1) * gap) / N);
+                    const indicatorHeight = 16;
+                    const totalUsedWidth = N * indicatorWidth + (N - 1) * gap;
+                    let currentX = 40 + (maxContentWidth - totalUsedWidth) / 2;
+                    
+                    this.staende.forEach(s => {
+                        ctx.fillStyle = (s.value === 1) ? "#0b12cd" : "#e53935";
+                        fillRoundRect(currentX, y, indicatorWidth, indicatorHeight, 2);
+                        currentX += indicatorWidth + gap;
+                    });
+                    y += indicatorHeight + 40;
+                }
+            }
+            
+            // 7. Load and Draw Logo in the bottom right corner
+            try {
+                const logoImg = new Image();
+                logoImg.src = "/static/abst/imgs/logo.png";
+                await new Promise((resolve, reject) => {
+                    logoImg.onload = resolve;
+                    logoImg.onerror = reject;
+                });
+                // Draw logo at the bottom right with aspect ratio preserved
+                const targetHeight = 35;
+                const aspect = logoImg.naturalWidth / logoImg.naturalHeight || logoImg.width / logoImg.height || 5;
+                const logoW = targetHeight * aspect;
+                const logoH = targetHeight;
+                ctx.drawImage(logoImg, width - logoW - 40, height - logoH - 30, logoW, logoH);
+            } catch (error) {
+                console.error("Fehler beim Zeichnen des Logos auf dem Canvas:", error);
+            }
+            
+            // 8. Download PNG
+            const pngUrl = canvas.toDataURL("image/png");
+            const downloadLink = document.createElement("a");
+            downloadLink.href = pngUrl;
+            const timestamp = new Date().toISOString().replace('T', '_').replace(/\..+/, '').replace(/:/g, '-');
+            downloadLink.download = "tabelle_" + this.vorlageId + "_" + timestamp + ".png";
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            document.body.removeChild(downloadLink);
+        },
 
         async init() {
             window.addEventListener('gemeinde-selected', this.handleGemeindeSelected.bind(this));

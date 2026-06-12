@@ -662,7 +662,8 @@ document.addEventListener('alpine:init', () => {
                 const pngUrl = canvas.toDataURL("image/png");
                 const downloadLink = document.createElement("a");
                 downloadLink.href = pngUrl;
-                downloadLink.download = "karte_" + this.vorlageId + ".png";
+                const timestamp = new Date().toISOString().replace('T', '_').replace(/\..+/, '').replace(/:/g, '-');
+                downloadLink.download = "karte_" + this.vorlageId + "_" + timestamp + ".png";
                 document.body.appendChild(downloadLink);
                 downloadLink.click();
                 document.body.removeChild(downloadLink);
