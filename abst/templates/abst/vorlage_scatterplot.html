@@ -189,6 +189,15 @@
                                 <i class="material-symbols-outlined left">file_download</i>Excel
                             </button>
                         </div>
+
+                        {% if user.is_authenticated %}
+                        <div style="margin-top: 1.5rem; border-top: 1px solid rgba(0,0,0,0.1); padding-top: 1rem;">
+                            <h6 style="margin: 0 0 0.75rem 0; font-weight: 600;">Erweiterte Analyse</h6>
+                            <a href="{% url 'abst:vorlage_behavior' vorlage.vorlagen_id %}" class="btn-flat waves-effect waves-light blue-text text-darken-2" style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; border: 1px solid #1976d2; border-radius: 4px; padding: 0.2rem 1rem; font-weight: 500; text-transform: none;">
+                                <i class="material-symbols-outlined">analytics</i>Wählerwanderung analysieren
+                            </a>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </aside>

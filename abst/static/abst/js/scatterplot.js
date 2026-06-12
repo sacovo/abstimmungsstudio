@@ -367,7 +367,7 @@ document.addEventListener('alpine:init', () => {
                     source: this.logoBase64,
                     xref: "paper",
                     yref: "paper",
-                    x: 1.16,
+                    x: 1.0,
                     y: -0.07,
                     sizex: 0.15,
                     sizey: 0.06,

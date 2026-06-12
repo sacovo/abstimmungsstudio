@@ -1,0 +1,514 @@
+{% extends 'abst/base.html' %}
+{% load static %}
+
+{% block title %}{{ vorlage.name }} - Wählerwanderung{% endblock %}
+
+{% block nav %}
+{% include 'abst/includes/vorlage_nav.html' %}
+{% endblock %}
+
+{% block content %}
+<article>
+    <h4>{{ vorlage.name }} - Wähleranalyse (Wählerwanderung)</h4>
+
+    <style>
+        .behavior-layout {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            align-items: stretch;
+        }
+
+        .behavior-layout-left {
+            flex: 1 1 70%;
+            max-width: calc(70% - 0.5rem);
+            min-width: 300px;
+            padding: 0;
+        }
+
+        .behavior-layout-right {
+            flex: 1 1 30%;
+            max-width: calc(30% - 0.5rem);
+            min-width: 300px;
+            padding: 0;
+        }
+
+        @media (max-width: 992px) {
+            .behavior-layout-left,
+            .behavior-layout-right {
+                flex-basis: 100%;
+                max-width: 100%;
+            }
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+
+    <div x-data="behaviorAnalysisView('{{ vorlage.vorlagen_id }}')" x-init="init()">
+        <div class="row behavior-layout">
+            <div class="col s12 behavior-layout-left">
+                <div id="sankey-container" style="width: 100%; height: 74vh; background: #040f2d; position: relative; border-radius: 12px; overflow: hidden; border: 1px solid rgba(0,0,0,0.08);">
+                    <!-- Loading Preloader -->
+                    <div x-show="loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 20;">
+                        <div class="preloader-wrapper big active">
+                            <div class="spinner-layer spinner-blue-only">
+                                <div class="circle-clipper left"><div class="circle"></div></div>
+                                <div class="gap-patch"><div class="circle"></div></div>
+                                <div class="circle-clipper right"><div class="circle"></div></div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Error Message -->
+                    <div x-show="error" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 15; background: rgba(255,255,255,0.9); padding: 2rem; text-align: center;">
+                        <i class="material-symbols-outlined red-text" style="font-size: 3rem; margin-bottom: 1rem;">error</i>
+                        <p class="red-text" style="font-weight: 500; font-size: 1.1rem;" x-text="error"></p>
+                    </div>
+
+                    <!-- Empty State -->
+                    <div x-show="!loading && !error && !hasData" style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; background: #f5f7fa; padding: 2rem; text-align: center;">
+                        <i class="material-symbols-outlined blue-text text-darken-2" style="font-size: 4rem; margin-bottom: 1rem;">insights</i>
+                        <h5 style="margin: 0; font-weight: 600;">Wählerwanderung berechnen</h5>
+                        <p class="grey-text" style="max-width: 450px; margin: 0.5rem 0 0 0;">Wählen Sie eine Quelle (Wahl oder ältere Abstimmung) aus der Seitenleiste, um das Stimmverhalten und die Übergänge zu analysieren.</p>
+                    </div>
+
+                    <div id="sankey-chart" style="width: 100%; height: 100%;" x-show="hasData"></div>
+                </div>
+            </div>
+
+            <aside class="col s12 behavior-layout-right">
+                <div class="card" style="height: 100%; margin: 0; border-radius: 12px; border: 1px solid rgba(0,0,0,0.08);">
+                    <div class="card-content" style="padding-bottom: 15px; display: flex; flex-direction: column; height: 100%; justify-content: space-between;">
+                        <div>
+                            <span class="card-title" style="font-size: 1.3rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="material-symbols-outlined">analytics</i>Analyse-Einstellungen
+                            </span>
+                            <p class="grey-text text-darken-1" style="font-size: 0.9rem; margin-bottom: 1.5rem;">
+                                Führen Sie eine ökologische Inferenz (Homogeneous Linear Programming) durch, um das Wahlverhalten der Wählerschaft von einer Quelle (Wahl/Abstimmung) zu dieser Abstimmung zu schätzen.
+                            </p>
+
+                            <div class="section" style="padding: 0;">
+                                <div class="input-field" style="margin-top: 0;">
+                                    <select x-model="selectedOptionId" x-ref="sourceSelect" @change="onSourceChange">
+                                        <option value="" disabled selected>Quelle auswählen...</option>
+                                        <template x-for="opt in options" :key="opt.id">
+                                            <option :value="opt.id" x-text="opt.name"></option>
+                                        </template>
+                                    </select>
+                                    <label>Quelle (Wahl oder Abstimmung)</label>
+                                </div>
+                            </div>
+
+                            <!-- Wahl-Ebene (only for election source) -->
+                            <div class="section" x-show="isElectionSelected()" x-cloak style="padding: 0; margin-top: 1rem;">
+                                <div class="input-field">
+                                    <select x-model="wahlenScope" x-ref="scopeSelect">
+                                        <option value="partei">Partei</option>
+                                        <option value="parteigruppe">Parteigruppe</option>
+                                        <option value="lager">Parteipolitisches Lager</option>
+                                    </select>
+                                    <label>Wahl-Ebene</label>
+                                </div>
+                            </div>
+
+                            <!-- Exclude option -->
+                            <div class="section" style="padding: 0; margin-top: 1rem;">
+                                <label>
+                                    <input type="checkbox" class="filled-in" x-model="excludeNonVoters" @change="if (hasData) { renderSankeyChart() }" />
+                                    <span>Nichtwähler & Enthaltungen ausblenden</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 2rem;">
+                            <!-- Actions -->
+                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <button class="btn waves-effect waves-light blue darken-2" @click="calculateBehavior()" :disabled="loading || !selectedOptionId" style="width: 100%; text-transform: none; display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+                                    <i class="material-symbols-outlined">autorenew</i>Berechnen
+                                </button>
+                                
+                                <div style="display: flex; gap: 0.5rem; width: 100%;">
+                                    <button class="btn waves-effect waves-light green" @click="downloadPng()" :disabled="!hasData" style="flex: 1; text-transform: none; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
+                                        <i class="material-symbols-outlined">image</i>PNG
+                                    </button>
+                                    <button class="btn waves-effect waves-light grey darken-2" @click="downloadExcel()" :disabled="!hasData" style="flex: 1; text-transform: none; display: flex; align-items: center; justify-content: center; gap: 0.25rem;">
+                                        <i class="material-symbols-outlined">table</i>Excel
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+</article>
+
+<script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('behaviorAnalysisView', (vorlageId) => ({
+        vorlageId: vorlageId,
+        loading: false,
+        options: [],
+        selectedOptionId: '',
+        wahlenScope: 'partei',
+        excludeNonVoters: false,
+        error: '',
+        hasData: false,
+        flowData: null,
+        logoBase64: '',
+        
+        // Colors mapping for parties and target votes
+        colors: {
+            'GRÜNE': '#84B547',
+            'SP': '#F0554D',
+            'PdA/Sol.': '#BF3939',
+            'GLP': '#C4C43D',
+            'Übrige': '#B8B8B8',
+            'Lega': '#9070D4',
+            'CSP': '#E3BA24',
+            'EVP': '#DEAA28',
+            'EDU': '#A65E42',
+            'neuwähler': '#7F7F7F',
+            'Neuwähler': '#7F7F7F',
+            'Mitte': '#D6862B',
+            'SVP': '#4B8A3E',
+            'FDP': '#3872B5',
+            'SD': '#9D9D9D',
+            'MCR': '#49A5E7',
+            'FGA': '#A83232',
+            'nichtwahler': '#D3D3D3',
+            'Nichtwähler': '#D3D3D3',
+            
+            // Target categories
+            'Ja (Ziel)': '#1f77b4',
+            'Nein (Ziel)': '#d62728',
+            'Enthaltung (Ziel)': '#7f7f7f',
+            'Exit': '#cccccc',
+            
+            // Vote sources
+            'Ja (Quelle)': '#1f77b4',
+            'Nein (Quelle)': '#d62728',
+            'Enthaltung (Quelle)': '#7f7f7f',
+
+            // Parteigruppen mappings
+            'Die Mitte': '#D6862B',
+            'Kleine Mitteparteien (LdU, EVP, CSP)': '#DEAA28',
+            'Kleine Rechtsparteien (SD, EDU, FPS, Lega, MCR)': '#A65E42',
+            'FDP.Die Liberalen (inkl. LPS)': '#3872B5',
+            'FDP. Die Liberalen (inkl. LPS)': '#3872B5',
+            'Grüne (GPS, FGA, POCH)': '#84B547',
+            'Grünliberale Partei': '#C4C43D',
+            'Kleine Linksparteien (PdA/Sol.)': '#BF3939',
+            'Schweizerische Volkspartei': '#4B8A3E',
+            'Sozialdemokratische Partei der Schweiz': '#F0554D',
+            'Übrige/Splittergruppen': '#B8B8B8',
+
+            // Parteipolitisches Lager mappings
+            'Linke und grüne Parteien (SP, PdA, Sol., POCH, FGA, GPS)': '#d62728',
+            'Traditionelle bürgerliche und rechte Parteien (FDP, Mitte, SVP, LPS, SD, EDU, FPS, Lega, MCR)': '#3872B5',
+            'Traditionelle bürgerliche und rechte Parteien (FDP, MItte, SVP, LPS, SD, EDU, FPS, Lega, MCR)': '#3872B5',
+            'Kleine Mitteparteien und andere (LdU, EVP, CSP, GLP, andere)': '#ff7f0e'
+        },
+
+        async init() {
+            this.loading = true;
+            try {
+                // Preload logo as base64 to embed in the Plotly layout for offline export
+                try {
+                    const logoResponse = await fetch("/static/abst/imgs/logo.png");
+                    const logoBlob = await logoResponse.blob();
+                    this.logoBase64 = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result);
+                        reader.readAsDataURL(logoBlob);
+                    });
+                } catch (logoErr) {
+                    console.error("Fehler beim Laden des Logos für Plotly:", logoErr);
+                }
+
+                const res = await fetch(`/api/abst/${this.vorlageId}/behavior/options`);
+                if (!res.ok) {
+                    throw new Error(await res.text() || 'Fehler beim Laden der Optionen');
+                }
+                this.options = await res.json();
+                
+                // Initialize select element
+                setTimeout(() => {
+                    M.FormSelect.init(this.$refs.sourceSelect);
+                }, 100);
+            } catch (err) {
+                this.error = err.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        onSourceChange() {
+            setTimeout(() => {
+                if (this.$refs.scopeSelect) {
+                    M.FormSelect.init(this.$refs.scopeSelect);
+                }
+            }, 50);
+        },
+        
+        isElectionSelected() {
+            const selectedOpt = this.options.find(o => o.id === this.selectedOptionId);
+            return selectedOpt && selectedOpt.type === 'election';
+        },
+
+        async calculateBehavior() {
+            if (!this.selectedOptionId) return;
+            
+            this.loading = true;
+            this.error = '';
+            this.hasData = false;
+            
+            const selectedOpt = this.options.find(o => o.id === this.selectedOptionId);
+            if (!selectedOpt) return;
+            
+            let url = `/api/abst/${this.vorlageId}/behavior/calculate?source_type=${selectedOpt.type}`;
+            if (selectedOpt.type === 'vote') {
+                url += `&source_id=${selectedOpt.vote_id}`;
+            } else if (selectedOpt.type === 'election') {
+                url += `&wahlen_scope=${this.wahlenScope}`;
+            }
+            
+            try {
+                const res = await fetch(url);
+                if (!res.ok) {
+                    const errMsg = await res.text();
+                    throw new Error(errMsg || 'Fehler bei der Berechnung der Inferenz');
+                }
+                
+                this.flowData = await res.json();
+                this.hasData = true;
+                
+                // Render chart
+                setTimeout(() => {
+                    this.renderSankeyChart();
+                }, 100);
+            } catch (err) {
+                this.error = err.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        renderSankeyChart() {
+            if (!this.flowData || !this.flowData.links.length) {
+                this.hasData = false;
+                this.error = 'Keine Daten für die Wanderung vorhanden.';
+                return;
+            }
+
+            const excludeLabels = ['Nichtwähler', 'nichtwahler', 'Neuwähler', 'neuwähler', 'Enthaltung (Quelle)', 'Enthaltung (Ziel)', 'Exit'];
+            
+            let links = [...this.flowData.links];
+            
+            if (this.excludeNonVoters) {
+                // Exclude only links where BOTH source and target are in the exclude list
+                links = links.filter(link => {
+                    const isSourceExclude = excludeLabels.includes(link.source);
+                    const isTargetExclude = excludeLabels.includes(link.target);
+                    return !(isSourceExclude && isTargetExclude);
+                });
+            }
+
+            if (!links.length) {
+                this.hasData = false;
+                this.error = 'Keine Daten für die Wanderung vorhanden.';
+                return;
+            }
+            
+            // Build the list of active source and target labels based on remaining links
+            const activeSourceLabels = new Set();
+            const activeTargetLabels = new Set();
+            links.forEach(link => {
+                activeSourceLabels.add(link.source);
+                activeTargetLabels.add(link.target);
+            });
+            
+            const sourceLabels = this.flowData.source_labels.filter(label => activeSourceLabels.has(label));
+            const targetLabels = this.flowData.target_labels.filter(label => activeTargetLabels.has(label));
+            const allLabels = [...sourceLabels, ...targetLabels];
+            
+            // Build map of label to index
+            const labelToIndex = {};
+            allLabels.forEach((label, idx) => {
+                labelToIndex[label] = idx;
+            });
+            
+            // Map links
+            const sources = [];
+            const targets = [];
+            const values = [];
+            const linkColors = [];
+            
+            links.forEach(link => {
+                sources.push(labelToIndex[link.source]);
+                targets.push(labelToIndex[link.target]);
+                values.push(link.value);
+                
+                // Link color is a translucent version of the source node color
+                const srcColor = this.getNodeColor(link.source);
+                // Convert hex or HSL to translucent version
+                if (srcColor.startsWith('#')) {
+                    const r = parseInt(srcColor.slice(1, 3), 16);
+                    const g = parseInt(srcColor.slice(3, 5), 16);
+                    const b = parseInt(srcColor.slice(5, 7), 16);
+                    linkColors.push(`rgba(${r}, ${g}, ${b}, 0.3)`);
+                } else if (srcColor.startsWith('hsl(')) {
+                    const hslaColor = srcColor.replace('hsl(', 'hsla(').replace(')', ', 0.3)');
+                    linkColors.push(hslaColor);
+                } else {
+                    linkColors.push('rgba(127,127,127,0.3)');
+                }
+            });
+            
+            // Node colors
+            const nodeColors = allLabels.map(label => this.getNodeColor(label));
+            
+            const data = [{
+                type: "sankey",
+                orientation: "h",
+                node: {
+                    pad: 18,
+                    thickness: 25,
+                    line: {
+                        color: "rgba(0,0,0,0.15)",
+                        width: 1
+                    },
+                    label: allLabels,
+                    color: nodeColors,
+                    customdata: allLabels,
+                    hovertemplate: 'Kategorie: %{customdata}<br>Stimmen: %{value:,.0f}<extra></extra>'
+                },
+                link: {
+                    source: sources,
+                    target: targets,
+                    value: values,
+                    color: linkColors,
+                    hovertemplate: '%{source.label} ➔ %{target.label}<br>Wanderung: %{value:,.0f} Stimmen<extra></extra>'
+                }
+            }];
+
+            const selectedOpt = this.options.find(o => o.id === this.selectedOptionId);
+            const sourceName = selectedOpt.name.replace(/^(Abstimmung:|Wahl:)\s*/, '');
+            const targetName = "{{ vorlage.name }}";
+
+            const layout = {
+                title: {
+                    text: `Wählerwanderung:<br><span style="font-size: 18px; font-weight: normal; color: #90caf9;">${sourceName}</span><br><span style="font-size: 18px; font-weight: normal; color: #90caf9;">➔ ${targetName}</span>`,
+                    font: {
+                        size: 28,
+                        family: 'Public Sans, Helvetica Neue, sans-serif',
+                        color: '#ffffff',
+                        weight: 'bold'
+                    },
+                    x: 0.02,
+                    y: 0.96,
+                    xanchor: 'left',
+                    yanchor: 'top'
+                },
+                font: {
+                    size: 11,
+                    family: 'Public Sans, Helvetica Neue, sans-serif',
+                    color: '#333333'
+                },
+                margin: {
+                    t: 180,
+                    b: 100,
+                    l: 100,
+                    r: 100
+                },
+                paper_bgcolor: '#040f2d',
+                plot_bgcolor: '#040f2d',
+                shapes: [{
+                    type: 'rect',
+                    xref: 'paper',
+                    yref: 'paper',
+                    x0: -0.03,
+                    y0: -0.03,
+                    x1: 1.03,
+                    y1: 1.03,
+                    fillcolor: '#f5f7fa',
+                    line: {
+                        color: '#020b26',
+                        width: 1.5
+                    },
+                    layer: 'below'
+                }]
+            };
+
+            if (this.logoBase64) {
+                layout.images = [{
+                    source: this.logoBase64,
+                    xref: "paper",
+                    yref: "paper",
+                    x: 1.0,
+                    y: -0.08,
+                    sizex: 0.15,
+                    sizey: 0.06,
+                    xanchor: "right",
+                    yanchor: "bottom",
+                    sizing: "contain"
+                }];
+            }
+
+            Plotly.newPlot("sankey-chart", data, layout, {
+                responsive: true,
+                displayModeBar: false
+            });
+        },
+        
+        getNodeColor(label) {
+            if (this.colors[label]) {
+                return this.colors[label];
+            }
+            // Hash-based color generation for unknown labels (nice HSL colors)
+            let hash = 0;
+            for (let i = 0; i < label.length; i++) {
+                hash = label.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const h = Math.abs(hash) % 360;
+            return `hsl(${h}, 60%, 45%)`;
+        },
+        
+        downloadPng() {
+            if (!this.hasData) return;
+            
+            const chartDiv = document.getElementById('sankey-chart');
+            const selectedOpt = this.options.find(o => o.id === this.selectedOptionId);
+            const sourceShortName = selectedOpt.type === 'vote' ? `vote_${selectedOpt.vote_id}` : `nrw2023_${this.wahlenScope}`;
+            const timestamp = new Date().toISOString().replace('T', '_').replace(/\..+/, '').replace(/:/g, '-');
+            const filename = `waehlerwanderung_${this.vorlageId}_${sourceShortName}_${timestamp}`;
+            
+            Plotly.downloadImage(chartDiv, {
+                format: 'png',
+                width: 1920,
+                height: 1080,
+                filename: filename
+            });
+        },
+        
+        downloadExcel() {
+            if (!this.hasData) return;
+            
+            const selectedOpt = this.options.find(o => o.id === this.selectedOptionId);
+            let url = `/api/abst/${this.vorlageId}/behavior/export-excel?source_type=${selectedOpt.type}`;
+            if (selectedOpt.type === 'vote') {
+                url += `&source_id=${selectedOpt.vote_id}`;
+            } else if (selectedOpt.type === 'election') {
+                url += `&wahlen_scope=${this.wahlenScope}`;
+            }
+            
+            window.location.href = url;
+        }
+    }));
+});
+</script>
+{% endblock %}

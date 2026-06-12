@@ -458,39 +458,58 @@ document.addEventListener('alpine:init', () => {
             ctx.fillText(line, 40, y);
             y += lineHeight + 20;
             
-            // Helper function to draw table row
+            const fillRoundRect = (x, y, w, h, r) => {
+                ctx.beginPath();
+                if (ctx.roundRect) {
+                    ctx.roundRect(x, y, w, h, r);
+                } else {
+                    ctx.rect(x, y, w, h);
+                }
+                ctx.fill();
+            };
+
+            // 5. Draw White Card Container
+            const cardTop = y;
+            const cardBottom = height - 90;
+            ctx.fillStyle = "#ffffff";
+            fillRoundRect(40, cardTop, 720, cardBottom - cardTop, 8);
+
+            // Shift drawing context inside the card
+            y += 25; // Top padding inside the card
+            
+            // Helper function to draw table row inside the card
             const drawRow = (label, colVal, yPos) => {
-                ctx.fillStyle = "#ffffff";
+                ctx.fillStyle = "#000000";
                 ctx.font = "16px 'Public Sans', sans-serif";
-                ctx.fillText(label, 40, yPos);
+                ctx.fillText(label, 65, yPos);
                 
                 ctx.textAlign = "right";
                 ctx.font = "16px 'Roboto Mono', monospace";
-                ctx.fillText(colVal, width - 40, yPos);
+                ctx.fillText(colVal, 735, yPos);
                 ctx.textAlign = "left";
                 
                 // Underline row
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.strokeStyle = "#e0e0e0";
                 ctx.lineWidth = 1;
                 ctx.beginPath();
-                ctx.moveTo(40, yPos + 26);
-                ctx.lineTo(width - 40, yPos + 26);
+                ctx.moveTo(65, yPos + 26);
+                ctx.lineTo(735, yPos + 26);
                 ctx.stroke();
             };
             
-            // 5. Draw Content
+            // 6. Draw Content inside the card
             if (this.selectedGemeinde) {
-                ctx.fillStyle = "#90caf9";
+                ctx.fillStyle = "#757575";
                 ctx.font = "600 18px 'Public Sans', sans-serif";
-                ctx.fillText(`Gemeinde: ${this.selectedGemeinde.name}`, 40, y);
+                ctx.fillText(`Gemeinde: ${this.selectedGemeinde.name}`, 65, y);
                 y += 40;
                 
                 drawRow("Geo ID", String(this.selectedGemeinde.geo_id), y); y += 36;
                 drawRow(this.valueLabel(), this.formatValue(this.selectedGemeinde.value), y); y += 36;
             } else {
-                ctx.fillStyle = "#a0aec0";
+                ctx.fillStyle = "#757575";
                 ctx.font = "16px 'Public Sans', sans-serif";
-                ctx.fillText("Klicke auf eine Gemeinde, um Details anzuzeigen.", 40, y);
+                ctx.fillText("Klicke auf eine Gemeinde, um Details anzuzeigen.", 65, y);
             }
             
             // 6. Load and Draw Logo in the bottom right corner
@@ -502,7 +521,7 @@ document.addEventListener('alpine:init', () => {
                     logoImg.onerror = reject;
                 });
                 // Draw logo at the bottom right with aspect ratio preserved
-                const targetHeight = 35;
+                const targetHeight = 17.5;
                 const aspect = logoImg.naturalWidth / logoImg.naturalHeight || logoImg.width / logoImg.height || 5;
                 const logoW = targetHeight * aspect;
                 const logoH = targetHeight;

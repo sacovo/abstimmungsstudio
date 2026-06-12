@@ -13,7 +13,15 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
   postgresql-client \
   python3-pip \
   netcat-traditional \
-  gettext git
+  gettext git \
+  r-base \
+  r-base-dev \
+  gfortran \
+  libblas-dev \
+  liblapack-dev \
+  && rm -rf /var/lib/apt/lists/*
+
+RUN R -e "install.packages('lphom', repos='https://cloud.r-project.org/')"
 
 
 RUN --mount=type=cache,target=/root/.cache pip install --upgrade uv

@@ -499,31 +499,6 @@ document.addEventListener('alpine:init', () => {
             ctx.fillText(regionText, 40, y);
             y += 40;
             
-            // Helper function to draw table row
-            const drawRow = (label, col1, col2, yPos, isHeader = false) => {
-                ctx.fillStyle = isHeader ? "#a0aec0" : "#ffffff";
-                ctx.font = isHeader ? "bold 16px 'Public Sans', sans-serif" : "16px 'Public Sans', sans-serif";
-                ctx.fillText(label, 40, yPos);
-                
-                ctx.textAlign = "right";
-                if (col1 !== null) {
-                    ctx.fillText(col1, width - 200, yPos);
-                }
-                if (col2 !== null) {
-                    ctx.fillStyle = isHeader ? "#a0aec0" : "#a0aec0";
-                    ctx.fillText(col2, width - 40, yPos);
-                }
-                ctx.textAlign = "left";
-                
-                // Underline row
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(40, yPos + 26);
-                ctx.lineTo(width - 40, yPos + 26);
-                ctx.stroke();
-            };
-
             const fillRoundRect = (x, y, w, h, r) => {
                 ctx.beginPath();
                 if (ctx.roundRect) {
@@ -533,15 +508,49 @@ document.addEventListener('alpine:init', () => {
                 }
                 ctx.fill();
             };
+
+            // 6. Draw White Card Container
+            const cardTop = y;
+            const cardBottom = height - 90;
+            ctx.fillStyle = "#ffffff";
+            fillRoundRect(40, cardTop, 720, cardBottom - cardTop, 8);
+
+            // Shift drawing context inside the card
+            y += 25; // Top padding inside the card
             
-            // Helper function to draw progress bar
+            // Helper function to draw table row inside the card
+            const drawRow = (label, col1, col2, yPos, isHeader = false) => {
+                ctx.fillStyle = isHeader ? "#757575" : "#000000";
+                ctx.font = isHeader ? "bold 16px 'Public Sans', sans-serif" : "16px 'Public Sans', sans-serif";
+                ctx.fillText(label, 65, yPos);
+                
+                ctx.textAlign = "right";
+                if (col1 !== null) {
+                    ctx.fillText(col1, 550, yPos);
+                }
+                if (col2 !== null) {
+                    ctx.fillStyle = isHeader ? "#757575" : "#757575";
+                    ctx.fillText(col2, 735, yPos);
+                }
+                ctx.textAlign = "left";
+                
+                // Underline row
+                ctx.strokeStyle = "#e0e0e0";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(65, yPos + 26);
+                ctx.lineTo(735, yPos + 26);
+                ctx.stroke();
+            };
+            
+            // Helper function to draw progress bar inside the card
             const drawProgressBar = (bar, yPos) => {
-                const barWidth = width - 80;
+                const barWidth = 670;
                 const barHeight = 16;
-                const xPos = 40;
+                const xPos = 65;
                 
                 // Draw rounded background container
-                ctx.fillStyle = "rgba(255, 255, 255, 0.1)";
+                ctx.fillStyle = "#e0e0e0";
                 fillRoundRect(xPos, yPos, barWidth, barHeight, 4);
                 
                 // Segments
@@ -567,16 +576,16 @@ document.addEventListener('alpine:init', () => {
                 drawSegment(neinBase, "#e53935"); // Nein (Ausgezählt) - Red
                 
                 // Draw 50% marker
-                ctx.fillStyle = "#ffffff";
+                ctx.fillStyle = "#333333";
                 ctx.fillRect(xPos + barWidth / 2 - 1, yPos - 2, 2, barHeight + 4);
             };
             
-            // 6. Draw Content depending on active view
+            // 7. Draw Content inside the card
             if (isGemeindeActive) {
                 // Gemeinde Results
-                ctx.fillStyle = "#ffffff";
+                ctx.fillStyle = "#000000";
                 ctx.font = "bold 20px 'Bricolage Grotesque', sans-serif";
-                ctx.fillText("Gemeindeergebnis", 40, y);
+                ctx.fillText("Gemeindeergebnis", 65, y);
                 y += 40;
                 
                 const res = this.gemeindeResult || {};
@@ -588,37 +597,37 @@ document.addEventListener('alpine:init', () => {
             } else if (isCantonTabActive) {
                 // Cantons Table
                 // Header
-                ctx.fillStyle = "#a0aec0";
+                ctx.fillStyle = "#757575";
                 ctx.font = "bold 16px 'Public Sans', sans-serif";
-                ctx.fillText("Kt.", 40, y);
+                ctx.fillText("Kt.", 65, y);
                 ctx.textAlign = "right";
-                ctx.fillText("Aus.", width - 360, y);
-                ctx.fillText("Pro.", width - 190, y);
-                ctx.fillText("Stand", width - 40, y);
+                ctx.fillText("Aus.", 375, y);
+                ctx.fillText("Pro.", 545, y);
+                ctx.fillText("Stand", 735, y);
                 ctx.textAlign = "left";
                 
-                ctx.strokeStyle = "rgba(255, 255, 255, 0.2)";
+                ctx.strokeStyle = "#bdbdbd";
                 ctx.beginPath();
-                ctx.moveTo(40, y + 26);
-                ctx.lineTo(width - 40, y + 26);
+                ctx.moveTo(65, y + 26);
+                ctx.lineTo(735, y + 26);
                 ctx.stroke();
                 y += 36;
                 
                 this.cantons.forEach(canton => {
-                    ctx.fillStyle = "#ffffff";
+                    ctx.fillStyle = "#000000";
                     ctx.font = (canton.jaProjectedPct > 50) ? "bold 16px 'Public Sans', sans-serif" : "16px 'Public Sans', sans-serif";
-                    ctx.fillText(canton.code, 40, y);
+                    ctx.fillText(canton.code, 65, y);
                     
                     ctx.textAlign = "right";
                     ctx.font = "16px 'Roboto Mono', monospace";
-                    ctx.fillText(this.fmtPct(canton.jaFinalPct), width - 360, y);
-                    ctx.fillText(this.fmtPct(canton.jaProjectedPct), width - 190, y);
-                    ctx.fillText(String(canton.stimmen), width - 40, y);
+                    ctx.fillText(this.fmtPct(canton.jaFinalPct), 375, y);
+                    ctx.fillText(this.fmtPct(canton.jaProjectedPct), 545, y);
+                    ctx.fillText(String(canton.stimmen), 735, y);
                     ctx.textAlign = "left";
                     
                     // Draw canton mini-bar below row
                     const cBar = this.getCantonBar(canton);
-                    const barWidth = width - 80;
+                    const barWidth = 670;
                     const barHeight = 4;
                     const barY = y + 22;
                     
@@ -628,7 +637,7 @@ document.addEventListener('alpine:init', () => {
                     const neinPred = parseFloat(cBar.neinPredPct) || 0;
                     const neinBase = parseFloat(cBar.neinBasePct) || 0;
                     
-                    let currentX = 40;
+                    let currentX = 65;
                     const drawMiniSegment = (pct, color) => {
                         if (pct <= 0) return;
                         const w = (pct / 100) * barWidth;
@@ -641,10 +650,10 @@ document.addEventListener('alpine:init', () => {
                     drawMiniSegment(neinPred, "#ef9a9a");
                     drawMiniSegment(neinBase, "#e53935");
                     
-                    ctx.strokeStyle = "rgba(255, 255, 255, 0.05)";
+                    ctx.strokeStyle = "#e0e0e0";
                     ctx.beginPath();
-                    ctx.moveTo(40, y + 28);
-                    ctx.lineTo(width - 40, y + 28);
+                    ctx.moveTo(65, y + 28);
+                    ctx.lineTo(735, y + 28);
                     ctx.stroke();
                     
                     y += 36;
@@ -658,9 +667,9 @@ document.addEventListener('alpine:init', () => {
                 y += 40;
                 
                 if (this.hasPrediction) {
-                    ctx.fillStyle = "#ffffff";
+                    ctx.fillStyle = "#000000";
                     ctx.font = "bold 20px 'Bricolage Grotesque', sans-serif";
-                    ctx.fillText("Hochrechnung", 40, y);
+                    ctx.fillText("Hochrechnung", 65, y);
                     y += 36;
                     
                     drawRow("Ja", this.projection.ja_pct, this.projection.ja, y); y += 36;
@@ -668,9 +677,9 @@ document.addEventListener('alpine:init', () => {
                     drawRow("Beteiligung", this.projection.beteiligung, null, y); y += 46;
                 }
                 
-                ctx.fillStyle = "#ffffff";
+                ctx.fillStyle = "#000000";
                 ctx.font = "bold 20px 'Bricolage Grotesque', sans-serif";
-                ctx.fillText("Ausgezählt", 40, y);
+                ctx.fillText("Ausgezählt", 65, y);
                 y += 36;
                 
                 drawRow("Ja", this.final.ja_pct, this.final.ja, y); y += 36;
@@ -679,22 +688,22 @@ document.addEventListener('alpine:init', () => {
                 
                 // Draw Standesstimmen if CH
                 if (this.vorlageRegion === 'CH') {
-                    ctx.fillStyle = "#ffffff";
+                    ctx.fillStyle = "#000000";
                     ctx.font = "bold 20px 'Bricolage Grotesque', sans-serif";
-                    ctx.fillText("Standesstimmen", 40, y);
+                    ctx.fillText("Standesstimmen", 65, y);
                     ctx.textAlign = "right";
-                    ctx.fillText(`${(this.standesStimmen / 2).toFixed(1).replace('.0', '')} / ${(this.totalStandesStimmen / 2).toFixed(1).replace('.0', '')}`, width - 40, y);
+                    ctx.fillText(`${(this.standesStimmen / 2).toFixed(1).replace('.0', '')} / ${(this.totalStandesStimmen / 2).toFixed(1).replace('.0', '')}`, 735, y);
                     ctx.textAlign = "left";
                     y += 30;
                     
                     // Draw circles / squares for standesstimmen (staende)
-                    const maxContentWidth = width - 80;
+                    const maxContentWidth = 670;
                     const N = this.staende.length;
                     const gap = 3;
                     const indicatorWidth = Math.floor((maxContentWidth - (N - 1) * gap) / N);
                     const indicatorHeight = 16;
                     const totalUsedWidth = N * indicatorWidth + (N - 1) * gap;
-                    let currentX = 40 + (maxContentWidth - totalUsedWidth) / 2;
+                    let currentX = 65 + (maxContentWidth - totalUsedWidth) / 2;
                     
                     this.staende.forEach(s => {
                         ctx.fillStyle = (s.value === 1) ? "#0b12cd" : "#e53935";
@@ -714,7 +723,7 @@ document.addEventListener('alpine:init', () => {
                     logoImg.onerror = reject;
                 });
                 // Draw logo at the bottom right with aspect ratio preserved
-                const targetHeight = 35;
+                const targetHeight = 17.5;
                 const aspect = logoImg.naturalWidth / logoImg.naturalHeight || logoImg.width / logoImg.height || 5;
                 const logoW = targetHeight * aspect;
                 const logoH = targetHeight;

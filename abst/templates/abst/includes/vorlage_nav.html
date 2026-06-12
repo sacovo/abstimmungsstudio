@@ -32,6 +32,13 @@
                 <i class="material-symbols-outlined left">scatter_plot</i>Analyse
             </a>
         </li>
+        {% if user.is_authenticated %}
+        <li>
+            <a href="{% url 'abst:vorlage_behavior' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
+            </a>
+        </li>
+        {% endif %}
         
         <!-- Search Dropdown -->
         <li>
@@ -81,6 +88,13 @@
                 <i class="material-symbols-outlined left">scatter_plot</i>Analyse
             </a>
         </li>
+        {% if user.is_authenticated %}
+        <li>
+            <a href="{% url 'abst:vorlage_behavior' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
+            </a>
+        </li>
+        {% endif %}
         <li>
             <div style="padding: 0 16px 8px 16px;">
                 <label for="mobile-vorlagen-select">Andere Vorlagen am {{ vorlage.tag.date|date:"d.m.Y" }}</label>
@@ -137,6 +151,7 @@ document.addEventListener('alpine:init', () => {
         currentViewPath() {
             if (window.location.pathname.includes('table')) return 'table/';
             if (window.location.pathname.includes('analyse')) return 'analyse/';
+            if (window.location.pathname.includes('behavior')) return 'behavior/';
             return 'map/';
         },
 

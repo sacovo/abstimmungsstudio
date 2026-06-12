@@ -15,6 +15,11 @@ urlpatterns = [
         name="vorlage_scatterplot",
     ),
     path(
+        "<int:vorlage_id>/behavior/",
+        views.vorlage_behavior_view,
+        name="vorlage_behavior",
+    ),
+    path(
         "<int:vorlage_id>/compare/<int:other_id>/",
         views.vorlage_compare_view,
         name="vorlage_compare",

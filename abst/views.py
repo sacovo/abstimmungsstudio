@@ -88,3 +88,11 @@ def proxy_geodata_view(request):
             )
     except Exception as e:
         return HttpResponseNotFound(f"Error fetching URL: {e}")
+
+
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def vorlage_behavior_view(request, vorlage_id):
+    vorlage = get_object_or_404(Vorlage, vorlagen_id=vorlage_id)
+    return render(request, "abst/vorlage_behavior.html", {"vorlage": vorlage})
