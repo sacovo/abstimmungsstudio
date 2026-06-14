@@ -1,4 +1,4 @@
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
 from unfold.admin import ModelAdmin
@@ -14,6 +14,7 @@ from abst.models import (
     Vorlage,
     Zaehlkreis,
 )
+from abst.predict import create_models
 from abst.store import fetch_and_store_eidg, fetch_and_store_kantonal
 
 
@@ -72,7 +73,7 @@ class ZaehlkreisAdmin(ModelAdmin):
 class AbstimmungstagAdmin(ModelAdmin):
     list_display = ("date", "name", "stand")
     ordering = ("-date",)
-    actions_detail = ["fetch_eidg", "fetch_kantonal"]
+    actions_detail = ["fetch_eidg", "fetch_kantonal", "generate_projection"]
 
     @action(
         description="Eidgenössisch",
@@ -95,6 +96,26 @@ class AbstimmungstagAdmin(ModelAdmin):
         if not obj or not obj.url_kantonal:
             return redirect(reverse_lazy("admin:abst_abstimmungstag_changelist"))
         fetch_and_store_kantonal(obj)
+        return redirect(
+            reverse_lazy("admin:abst_abstimmungstag_change", args=[object_id])
+        )
+
+    @action(
+        description="Projektion generieren",
+    )
+    def generate_projection(self, request, object_id):
+        obj = self.get_object(request, object_id)
+        if not obj:
+            return redirect(reverse_lazy("admin:abst_abstimmungstag_changelist"))
+        try:
+            create_models(obj)
+            messages.success(
+                request,
+                "Projektion erfolgreich generiert."
+            )
+        except Exception as e:
+            messages.error(request, f"Fehler beim Generieren der Projektion: {e}")
+
         return redirect(
             reverse_lazy("admin:abst_abstimmungstag_change", args=[object_id])
         )

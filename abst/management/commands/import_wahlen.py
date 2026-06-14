@@ -5,6 +5,7 @@ from abst.store import (
     WAHLEN_META_URL,
     WAHLEN_RESULTATE_URL,
     fetch_and_store_wahlen_results,
+    fetch_and_store_wahlen_turnout,
     import_wahlen_metadata,
 )
 
@@ -26,9 +27,11 @@ class Command(BaseCommand):
         imported_results = fetch_and_store_wahlen_results(
             json_url=options["result_url"],
         )
+        imported_turnout = fetch_and_store_wahlen_turnout()
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Import abgeschlossen: {imported_meta} Parteien, {imported_results} Resultat-Zeilen."
+                f"Import abgeschlossen: {imported_meta} Parteien, {imported_results} Resultat-Zeilen, {imported_turnout} Turnout-Zeilen."
             )
         )
+

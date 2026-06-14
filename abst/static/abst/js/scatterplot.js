@@ -300,6 +300,37 @@ document.addEventListener('alpine:init', () => {
             return fallback[Math.abs(Number(kantonId) || 0) % fallback.length];
         },
 
+        getWahlenOptionLabel() {
+            const options = this.currentWahlenOptions();
+            const option = options.find((o) => String(o.id) === String(this.wahlenOptionId));
+            return option ? option.name : '';
+        },
+
+        getAbstimmungOptionLabel() {
+            const found = this.abstimmungResults.find((v) => String(v.id) === String(this.abstimmungVorlageId));
+            return found ? found.name : '';
+        },
+
+        getDetailedMetricLabel(metricId) {
+            if (metricId === 'wahlen_result') {
+                const partyName = this.getWahlenOptionLabel();
+                if (partyName) {
+                    const suffix = this.wahlenMode === 'diff' ? ' (Differenz)' : '';
+                    return `Wahlresultat: ${partyName}${suffix}`;
+                }
+                return 'Wahlresultat';
+            }
+            if (metricId === 'abstimmung_result') {
+                const abstName = this.getAbstimmungOptionLabel();
+                const modeLabel = this.abstimmungResultMode === 'ja_prozent' ? 'Ja %' : 'Beteiligung %';
+                if (abstName) {
+                    return `Abstimmung: ${abstName} (${modeLabel})`;
+                }
+                return 'Andere Abstimmung';
+            }
+            return this.metricName(metricId);
+        },
+
         renderPlot() {
             const sizeRaw = this.points.map((p) => p.size_value || 0);
             const sizes = this.scaledSizes(sizeRaw);
@@ -319,7 +350,7 @@ document.addEventListener('alpine:init', () => {
 
             const h4Element = document.querySelector('article h4');
             const voteName = h4Element ? h4Element.innerText.replace(" - Scatterplot Analyse", "").trim() : "";
-            const mainTitle = `${this.metricName(this.xMetric)} vs ${this.metricName(this.yMetric)}`;
+            const mainTitle = `${this.getDetailedMetricLabel(this.xMetric)} vs ${this.getDetailedMetricLabel(this.yMetric)}`;
             const plotTitle = voteName 
                 ? `${mainTitle}<br><span style="font-size: 22px; font-weight: normal; color: #90caf9;">${voteName}</span>` 
                 : mainTitle;
@@ -329,29 +360,31 @@ document.addEventListener('alpine:init', () => {
                 title: {
                     text: plotTitle,
                     x: 0.01,
-                    y: 0.96,
+                    y: 0.98,
                     yanchor: 'top',
-                    font: { color: '#ffffff', size: 34 }
+                    font: { color: '#ffffff', size: 26 }
                 },
-                margin: { l: 65, r: 100, t: 110, b: 90 },
+                margin: { l: 90, r: 100, t: 130, b: 100 },
                 paper_bgcolor: '#040f2d',
                 plot_bgcolor: '#eef2f7',
                 xaxis: {
                     title: {
-                        text: this.metricName(this.xMetric),
-                        font: { color: '#ffffff', size: 20 }
+                        text: this.getDetailedMetricLabel(this.xMetric),
+                        font: { color: '#ffffff', size: 18 },
+                        standoff: 20
                     },
-                    tickfont: { color: '#a0aec0', size: 16 },
+                    tickfont: { color: '#a0aec0', size: 14 },
                     zeroline: false,
                     gridcolor: '#d8dee8',
                     type: this.xLog ? 'log' : 'linear',
                 },
                 yaxis: {
                     title: {
-                        text: this.metricName(this.yMetric),
-                        font: { color: '#ffffff', size: 20 }
+                        text: this.getDetailedMetricLabel(this.yMetric),
+                        font: { color: '#ffffff', size: 18 },
+                        standoff: 20
                     },
-                    tickfont: { color: '#a0aec0', size: 16 },
+                    tickfont: { color: '#a0aec0', size: 14 },
                     zeroline: false,
                     gridcolor: '#d8dee8',
                     type: this.yLog ? 'log' : 'linear',
@@ -510,20 +543,35 @@ document.addEventListener('alpine:init', () => {
         },
 
         buildHoverText(p) {
+            const partyName = this.getWahlenOptionLabel();
+            const wahlenLabel = partyName ? `Wahlresultat ${partyName}` : 'Wahlresultat';
             const wahlen = p.wahlen_value == null ? '-' : `${p.wahlen_value.toFixed(2)}%`;
+
+            const abstName = this.getAbstimmungOptionLabel();
+            const abstLabel = abstName ? `Abstimmung: ${abstName}` : 'Vergleichsabstimmung';
             const abstimmung = p.abstimmung_value == null ? '-' : `${p.abstimmung_value.toFixed(2)}%`;
+
             return (
                 `${p.name} (${p.kanton})<br>` +
                 `Status: ${p.status}<br>` +
                 `Ja: ${p.ja_prozent.toFixed(2)}%<br>` +
                 `Beteiligung: ${p.stimmbeteiligung.toFixed(2)}%<br>` +
                 `Stimmberechtigte: ${p.anzahl_stimmberechtigte.toLocaleString('de-CH')}<br>` +
-                `Wahlresultat: ${wahlen}<br>` +
-                `Vergleichsabstimmung: ${abstimmung}`
+                `${wahlenLabel}: ${wahlen}<br>` +
+                `${abstLabel}: ${abstimmung}`
             );
         },
 
         colorMetricLabel() {
+            if (this.colorMetric === 'wahlen_result') {
+                return `Nach ${this.getDetailedMetricLabel('wahlen_result')}`;
+            }
+            if (this.colorMetric === 'abstimmung_result') {
+                return `Nach ${this.getDetailedMetricLabel('abstimmung_result')}`;
+            }
+            if (['ja_prozent', 'stimmbeteiligung', 'anzahl_stimmberechtigte'].includes(this.colorMetric)) {
+                return `Nach ${this.metricName(this.colorMetric)}`;
+            }
             const mode = this.colorModes.find(m => m.id === this.colorMetric);
             return mode ? mode.name : this.colorMetric;
         },

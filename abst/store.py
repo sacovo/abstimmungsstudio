@@ -24,6 +24,10 @@ WAHLEN_META_URL = (
 WAHLEN_RESULTATE_URL = (
     "https://ogd-static.voteinfo-app.ch/v4/ogd/sd-t-17.02-NRW2023-parteien.json"
 )
+WAHLEN_TURNOUT_URL = (
+    "https://ogd-static.voteinfo-app.ch/v4/ogd/sd-t-17.02-NRW2023-wahlbeteiligung.json"
+)
+
 
 
 def import_abst_meta(
@@ -202,6 +206,73 @@ def fetch_and_store_wahlen_results(json_url: str = WAHLEN_RESULTATE_URL) -> int:
         write_api.write(bucket=settings.INFLUX_BUCKET, record=points)
 
     return len(points)
+
+
+def fetch_and_store_wahlen_turnout(json_url: str = WAHLEN_TURNOUT_URL) -> int:
+    data = requests.get(json_url).json()
+    rows = data.get("level_gemeinden", [])
+    if not rows:
+        return 0
+
+    timestamp = int(datetime.datetime.now().timestamp() * 1_000_000_000)
+    points = []
+
+    for row in rows:
+        geo_id = row.get("gemeinde_nummer")
+        if geo_id is None:
+            continue
+
+        turnout = (
+            row.get("wahlbeteiligung")
+            or row.get("stimmbeteiligung")
+            or row.get("wahlbeteiligung_in_prozent")
+            or row.get("stimmbeteiligung_in_prozent")
+        )
+        if turnout is None:
+            continue
+
+        points.append(
+            {
+                "measurement": "wahlen_turnout",
+                "tags": {
+                    "geo_id": int(geo_id),
+                },
+                "fields": {
+                    "wahlbeteiligung": float(turnout),
+                },
+                "time": timestamp,
+            }
+        )
+
+    if not points:
+        return 0
+
+    with get_influx_client() as client:
+        write_api = client.write_api(write_options=SYNCHRONOUS)
+        write_api.write(bucket=settings.INFLUX_BUCKET, record=points)
+
+    return len(points)
+
+
+def query_election_turnout_df() -> pl.DataFrame:
+    with get_influx_client() as client:
+        query_api = client.query_api()
+        query = f'''
+        from(bucket: "{settings.INFLUX_BUCKET}")
+          |> range(start: -100y)
+          |> filter(fn: (r) => r._measurement == "wahlen_turnout" and r._field == "wahlbeteiligung")
+          |> last()
+          |> pivot(rowKey:["geo_id"], columnKey: ["_field"], valueColumn: "_value")
+        '''
+        result = query_api.query_data_frame(query)
+        if isinstance(result, list):
+            if len(result) == 0:
+                return pl.DataFrame()
+            result = pd.concat(result)
+        if len(result) == 0:
+            return pl.DataFrame()
+        return pl.from_pandas(result)
+
 
 
 def get_wahlen_results(partei_id: int, mode: str = "current"):
