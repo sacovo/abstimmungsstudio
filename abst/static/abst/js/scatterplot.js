@@ -25,6 +25,8 @@ document.addEventListener('alpine:init', () => {
         abstimmungSearch: '',
         abstimmungSearchTimer: null,
         logoBase64: '',
+        xLog: false,
+        yLog: false,
 
         async init() {
             this.loading = true;
@@ -342,6 +344,7 @@ document.addEventListener('alpine:init', () => {
                     tickfont: { color: '#a0aec0', size: 16 },
                     zeroline: false,
                     gridcolor: '#d8dee8',
+                    type: this.xLog ? 'log' : 'linear',
                 },
                 yaxis: {
                     title: {
@@ -351,6 +354,7 @@ document.addEventListener('alpine:init', () => {
                     tickfont: { color: '#a0aec0', size: 16 },
                     zeroline: false,
                     gridcolor: '#d8dee8',
+                    type: this.yLog ? 'log' : 'linear',
                 },
                 legend: {
                     title: {

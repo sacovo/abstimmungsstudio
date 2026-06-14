@@ -100,6 +100,17 @@
                                 </select>
                                 <label>Groesse</label>
                             </div>
+
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
+                                <label style="margin-bottom: 0;">
+                                    <input type="checkbox" class="filled-in" x-model="xLog" @change="renderPlot()" />
+                                    <span>Log. X-Achse</span>
+                                </label>
+                                <label style="margin-bottom: 0;">
+                                    <input type="checkbox" class="filled-in" x-model="yLog" @change="renderPlot()" />
+                                    <span>Log. Y-Achse</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div class="section" x-show="usesWahlenSection()" x-cloak>
