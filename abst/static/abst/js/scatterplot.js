@@ -27,6 +27,7 @@ document.addEventListener('alpine:init', () => {
         logoBase64: '',
         xLog: false,
         yLog: false,
+        solidColor: '#7e8ba3',
 
         async init() {
             this.loading = true;
@@ -492,7 +493,7 @@ document.addEventListener('alpine:init', () => {
                 hovertemplate: '%{text}<extra></extra>',
                 marker: {
                     size: sizes,
-                    color: '#7e8ba3',
+                    color: this.solidColor || '#7e8ba3',
                     opacity: 0.78,
                     line: { width: 0.5, color: '#213547' },
                 },

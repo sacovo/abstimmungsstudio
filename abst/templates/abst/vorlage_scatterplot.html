@@ -187,6 +187,16 @@
                                 </select>
                                 <label>Farbmodus</label>
                             </div>
+
+                            <div x-show="colorMetric === 'solid'" x-cloak style="margin-top: 1rem;">
+                                <div style="display: flex; align-items: center; gap: 1rem;">
+                                    <input type="color" x-model="solidColor" @change="renderPlot()" style="border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; padding: 0; background: none;">
+                                    <div style="flex-grow: 1;">
+                                        <input id="solid-color-text" type="text" x-model="solidColor" @input="renderPlot()" style="margin: 0;">
+                                        <label for="solid-color-text" class="active">Farbe (Hex)</label>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">

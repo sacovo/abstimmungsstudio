@@ -643,14 +643,15 @@ def fetch_results_kantonal(
                 )
                 vorlage_results.append(gemeinde_result)
 
-            if "zaehlkreise" in kanton:
+            if "zaehlkreise" in vorlage:
                 has_zk = True
-                for zaehlkreis in kanton["zaehlkreise"]:
+                for zaehlkreis in vorlage["zaehlkreise"]:
                     result_data = zaehlkreis["resultat"]
                     gemeinde_result = _convert_result_data(
                         timestamp, zaehlkreis, vorlage, kanton, result_data
                     )
                     vorlage_results.append(gemeinde_result)
+
 
             vorlagen.append(
                 VorlageSchema(

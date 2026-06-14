@@ -382,4 +382,85 @@ class AdminActionTests(TestCase):
         self.assertIn(f"/admin/abst/abstimmungstag/{tag.id}/change/", response.url)
 
 
+class KantonalImportTests(TestCase):
+    @patch("abst.store.requests.get")
+    def test_fetch_results_kantonal_includes_zaehlkreise(self, mock_get):
+        from abst.store import fetch_results_kantonal
+        from abst.models import Kanton
+        
+        Kanton.objects.create(name="Zürich", short="ZH", kanton_id=1, lang_code="de")
+
+        # Mock JSON data
+        mock_json = {
+            "abstimmtag": "20260614",
+            "kantone": [
+                {
+                    "geoLevelnummer": "1",
+                    "geoLevelname": "Zürich",
+                    "vorlagen": [
+
+                        {
+                            "vorlagenId": 1234,
+                            "vorlagenTitel": [{"langKey": "de", "text": "Test Vorlage"}],
+                            "vorlageBeendet": True,
+                            "vorlageAngenommen": True,
+                            "resultat": {"gebietAusgezaehlt": True},
+                            "gemeinden": [
+                                {
+                                    "geoLevelnummer": "1",
+                                    "geoLevelname": "Aeugst am Albis",
+                                    "resultat": {
+                                        "gebietAusgezaehlt": True,
+                                        "jaStimmenInProzent": 50.0,
+                                        "jaStimmenAbsolut": 100,
+                                        "neinStimmenAbsolut": 100,
+                                        "stimmbeteiligungInProzent": 50.0,
+                                        "anzahlStimmberechtigte": 400
+                                    }
+                                }
+                            ],
+                            "zaehlkreise": [
+                                {
+                                    "geoLevelnummer": "10230",
+                                    "geoLevelname": "Winterthur Altstadt",
+                                    "resultat": {
+                                        "gebietAusgezaehlt": True,
+                                        "jaStimmenInProzent": 60.0,
+                                        "jaStimmenAbsolut": 300,
+                                        "neinStimmenAbsolut": 200,
+                                        "stimmbeteiligungInProzent": 50.0,
+                                        "anzahlStimmberechtigte": 1000
+                                    }
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+        
+        mock_response = mock_get.return_value
+        mock_response.json.return_value = mock_json
+        
+        results, vorlagen = fetch_results_kantonal("http://mock-url.json")
+        
+        self.assertEqual(len(vorlagen), 1)
+        self.assertEqual(vorlagen[0].vorlagen_id, 1234)
+        self.assertTrue(vorlagen[0].has_zk)
+        
+        # Should have 2 results: 1 gemeinde + 1 zaehlkreis
+        self.assertEqual(len(results), 2)
+        
+        geo_ids = [r.geo_id for r in results]
+        self.assertIn(1, geo_ids)
+        self.assertIn(10230, geo_ids)
+        
+        # Verify zaehlkreis data
+        zk_res = next(r for r in results if r.geo_id == 10230)
+        self.assertEqual(zk_res.result.ja_stimmen, 300)
+        self.assertEqual(zk_res.result.nein_stimmen, 200)
+        self.assertEqual(zk_res.result.stimmbeteiligung, 50.0)
+
+
+
 
