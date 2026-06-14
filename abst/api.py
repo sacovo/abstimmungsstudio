@@ -387,6 +387,126 @@ def export_scatter_xlsx(
     return response
 
 
+class ManualResultInputSchema(Schema):
+    vorlage_id: int
+    geo_id: int
+    ja_stimmen: int
+    nein_stimmen: int
+    anzahl_stimmberechtigte: int
+
+
+@router.post("manual-result", auth=django_auth)
+@csrf_exempt
+def post_manual_result(request, data: ManualResultInputSchema):
+    latest_tag = Abstimmungstag.objects.order_by("-date").first()
+    if not latest_tag:
+        raise HttpError(400, "Keine Abstimmungstage vorhanden.")
+
+    try:
+        vorlage = Vorlage.objects.get(vorlagen_id=data.vorlage_id)
+    except Vorlage.DoesNotExist:
+        raise HttpError(404, "Vorlage nicht gefunden.")
+
+    if vorlage.tag != latest_tag:
+        raise HttpError(400, "Manuelle Erfassung ist nur für den aktuellsten Abstimmungstag erlaubt.")
+
+    # Find location
+    gemeinde = Gemeinde.objects.filter(geo_id=data.geo_id, stand=latest_tag.stand).first()
+    zaehlkreis = None
+    if not gemeinde:
+        zaehlkreis = Zaehlkreis.objects.filter(geo_id=data.geo_id, gemeinde__stand=latest_tag.stand).first()
+        if not zaehlkreis:
+            raise HttpError(400, "Ungültige Gemeinde/Zählkreis für diesen Abstimmungstag.")
+        kanton_id = zaehlkreis.gemeinde.kanton_id
+        kanton_name = zaehlkreis.gemeinde.kanton
+        geo_name = zaehlkreis.name
+    else:
+        kanton_id = gemeinde.kanton_id
+        kanton_name = gemeinde.kanton
+        geo_name = gemeinde.name
+
+    total_votes = data.ja_stimmen + data.nein_stimmen
+    if data.anzahl_stimmberechtigte < 0:
+        raise HttpError(400, "Anzahl Stimmberechtigte darf nicht negativ sein.")
+    if data.ja_stimmen < 0 or data.nein_stimmen < 0:
+        raise HttpError(400, "Stimmen dürfen nicht negativ sein.")
+
+    stimmbeteiligung = (total_votes / data.anzahl_stimmberechtigte * 100) if data.anzahl_stimmberechtigte > 0 else 0.0
+    ja_prozent = (data.ja_stimmen / total_votes * 100) if total_votes > 0 else 0.0
+
+    import datetime
+    from abst.schema import GemeindeResult, Result
+    from abst.store import store_results, update_vorlage
+    from abst.tasks import predict_results_task
+
+    res = GemeindeResult(
+        timestamp=datetime.datetime.now().timestamp(),
+        geo_id=data.geo_id,
+        vorlage_id=data.vorlage_id,
+        geo_name=geo_name,
+        kanton=kanton_name,
+        kanton_id=kanton_id,
+        result=Result(
+            final=True,
+            ja_stimmen=data.ja_stimmen,
+            nein_stimmen=data.nein_stimmen,
+            anzahl_stimmberechtigte=data.anzahl_stimmberechtigte,
+            stimmbeteiligung=stimmbeteiligung,
+            ja_prozent=ja_prozent,
+        )
+    )
+    store_results([res])
+
+    # Update the stats synchronously so the current numbers update immediately
+    update_vorlage(data.vorlage_id)
+
+    # Queue background prediction task
+    try:
+        predict_results_task.delay(data.vorlage_id)
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Failed to queue prediction task, running synchronously: {e}")
+        try:
+            predict_results_task(data.vorlage_id)
+        except Exception as sync_exc:
+            logger.error(f"Failed to run prediction task synchronously: {sync_exc}")
+
+    return {"success": True}
+
+
+@router.get("vorlagen/{vorlage_id}/gemeinden/{geo_id}/result", auth=django_auth)
+def get_gemeinde_result(request, vorlage_id: int, geo_id: int):
+    results = get_abst_results(vorlage_id)
+    if results is not None:
+        row = results.filter(pl.col("geo_id") == geo_id)
+        if not row.is_empty():
+            res_dict = row.to_dicts()[0]
+            return {
+                "exists": True,
+                "ja_stimmen": res_dict.get("ja_stimmen", 0),
+                "nein_stimmen": res_dict.get("nein_stimmen", 0),
+                "anzahl_stimmberechtigte": res_dict.get("anzahl_stimmberechtigte", 0),
+                "status": res_dict.get("status", "prediction")
+            }
+    
+    # Try to pre-fill eligible voters from get_stimmberechtigte if not found
+    from abst.store import get_stimmberechtigte
+    try:
+        df_stimm = get_stimmberechtigte()
+        if df_stimm is not None:
+            row_stimm = df_stimm.filter(pl.col("geo_id") == geo_id)
+            if not row_stimm.is_empty():
+                return {
+                    "exists": False,
+                    "anzahl_stimmberechtigte": int(row_stimm.to_dicts()[0].get("anzahl_stimmberechtigte", 0))
+                }
+    except Exception:
+        pass
+
+    return {"exists": False}
+
+
 @router.post(
     "{vorlage_id}/test_prediction",
     response=TestPredictionResponseSchema,
@@ -528,5 +648,14 @@ def api_export_behavior_excel(
             f'attachment; filename="{filename}"'
         )
         return response
+    except Exception as e:
+        raise HttpError(400, str(e))
+
+
+@router.get("{vorlage_id}/timeline", response=list[dict])
+def api_get_timeline(request, vorlage_id: int):
+    from abst.store import get_national_timeline
+    try:
+        return get_national_timeline(vorlage_id)
     except Exception as e:
         raise HttpError(400, str(e))

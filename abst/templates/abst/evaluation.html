@@ -1,0 +1,633 @@
+{% extends "abst/base.html" %}
+{% load static %}
+
+{% block title %}Prediction Accuracy Evaluation{% endblock %}
+
+{% block nav %}
+    {% include 'abst/includes/main_nav.html' %}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid" style="padding: 20px 30px;">
+    <div class="row">
+        <!-- Sidebar: Region Selector -->
+        <div class="col s12 m3">
+            <div class="card" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                <div class="card-content" style="padding: 20px;">
+                    <span class="card-title" style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.4rem; color: #263238; margin-bottom: 15px;">
+                        Regionen
+                    </span>
+                    <p style="color: #607d8b; font-size: 0.9rem; margin-bottom: 20px;">
+                        Wählen Sie eine Region aus, um den Simulationsbericht anzuzeigen.
+                    </p>
+                    
+                    <div class="collection" style="border: none; border-radius: 6px; margin: 0;">
+                        {% for r in reports %}
+                        <a href="?region={{ r.region }}" 
+                           class="collection-item {% if r.region == selected_region %}active indigo darken-2{% else %}black-text{% endif %}"
+                           style="border: none; margin-bottom: 5px; border-radius: 4px; padding: 12px 16px; font-weight: 500; transition: all 0.2s ease;">
+                            <span class="badge {% if r.region == selected_region %}white-text{% else %}grey-text text-darken-1{% endif %}" style="font-family: 'Roboto Mono', monospace;">
+                                {{ r.num_votes }} Vorlagen
+                            </span>
+                            {{ r.region }}
+                            {% if r.region == 'CH' %}
+                                <span style="font-size: 0.8rem; font-weight: normal; opacity: 0.8; display: block;">Eidgenössisch</span>
+                            {% else %}
+                                <span style="font-size: 0.8rem; font-weight: normal; opacity: 0.8; display: block;">Kanton {{ r.region }}</span>
+                            {% endif %}
+                        </a>
+                        {% empty %}
+                        <div class="grey-text" style="padding: 10px; text-align: center;">Keine Berichte vorhanden.</div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col s12 m9">
+            {% if active_report %}
+            <!-- Header Summary Card -->
+            <div class="card" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); margin-bottom: 20px;">
+                <div class="card-content" style="padding: 24px;">
+                    <div class="row" style="margin: 0; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;">
+                        <div>
+                            <h2 style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.2rem; margin: 0; color: #1a237e;">
+                                Evaluationsbericht: {{ selected_region }}
+                            </h2>
+                            <p class="grey-text text-darken-1" style="margin-top: 5px; font-size: 1rem;">
+                                Generiert am: <strong>{{ active_report.created_at|date:"d.m.Y H:i" }}</strong>
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 15px; margin-top: 15px;">
+                            <div style="background-color: #e8eaf6; padding: 10px 20px; border-radius: 6px; text-align: center; border-left: 4px solid #3f51b5;">
+                                <div style="font-size: 0.8rem; color: #5c6bc0; font-weight: 600; text-transform: uppercase;">Ausgewertete Vorlagen</div>
+                                <div style="font-size: 1.6rem; font-weight: 800; color: #1a237e; font-family: 'Roboto Mono', monospace;">{{ active_report.num_votes }}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Collapsible: List of Votes Evaluated -->
+                    <ul class="collapsible" style="border: none; box-shadow: none; margin-top: 25px; margin-bottom: 0;">
+                        <li style="border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden;">
+                            <div class="collapsible-header grey lighten-5" style="border: none; display: flex; align-items: center; justify-content: space-between; padding: 12px 20px;">
+                                <span style="font-weight: 600; color: #37474f; display: flex; align-items: center; gap: 8px;">
+                                    <i class="material-symbols-outlined" style="margin: 0; font-size: 1.2rem; color: #3f51b5;">info</i>
+                                    Ausgewertete Vorlagen anzeigen
+                                </span>
+                                <i class="material-symbols-outlined keyboard-arrow" style="margin: 0; transition: transform 0.2s;">keyboard_arrow_down</i>
+                            </div>
+                            <div class="collapsible-body" style="border: none; padding: 15px 20px; background-color: #fff;">
+                                <ul style="margin: 0; padding-left: 20px; list-style-type: decimal;">
+                                    {% for v in evaluated_votes %}
+                                    <li style="margin-bottom: 8px; color: #37474f; font-size: 0.95rem;">
+                                        <a href="{% url 'abst:vorlage_table' v.id %}" target="_blank" style="font-weight: 500; color: #3f51b5;">
+                                            {{ v.name }}
+                                        </a> 
+                                        <span style="font-family: 'Roboto Mono', monospace; font-size: 0.85rem; color: #78909c; margin-left: 6px;">(ID: {{ v.id }})</span>
+                                    </li>
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Tabs: Metric Selector -->
+            <div class="row" style="margin-bottom: 20px;">
+                <div class="col s12">
+                    <ul class="tabs" style="border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); overflow: hidden;">
+                        <li class="tab col s6">
+                            <a href="#yes-metric" class="active indigo-text text-darken-4" style="font-weight: 700; font-size: 1rem;">
+                                <i class="material-symbols-outlined" style="vertical-align: middle; margin-right: 6px; font-size: 1.3rem;">thumb_up</i>
+                                Ja-Stimmen (Yes%)
+                            </a>
+                        </li>
+                        <li class="tab col s6">
+                            <a href="#bet-metric" class="indigo-text text-darken-4" style="font-weight: 700; font-size: 1rem;">
+                                <i class="material-symbols-outlined" style="vertical-align: middle; margin-right: 6px; font-size: 1.3rem;">how_to_reg</i>
+                                Stimmbeteiligung (Turnout%)
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- TAB 1: YES% METRICS -->
+            <div id="yes-metric" class="col s12" style="padding: 0;">
+                <div class="row">
+                    <!-- Chart 1: Error Bands -->
+                    <div class="col s12 l8">
+                        <div class="card" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                            <div class="card-content">
+                                <span class="card-title" style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.2rem; color: #263238; margin-bottom: 20px;">
+                                    Abweichung & Vertrauensbereiche (Ja-Stimmen)
+                                </span>
+                                <div style="position: relative; height: 320px; width: 100%;">
+                                    <canvas id="yesBandsChart"></canvas>
+                                </div>
+                                <p style="color: #78909c; font-size: 0.8rem; text-align: center; margin-top: 15px;">
+                                    Zeigt den Median-Fehler (Linie) und die Fehlerbänder für 50% CI (dunkel) und 80% CI (hell) über die Vorlagen hinweg.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Chart 2: MAE -->
+                    <div class="col s12 l4">
+                        <div class="card" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                            <div class="card-content">
+                                <span class="card-title" style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.2rem; color: #263238; margin-bottom: 20px;">
+                                    Mittlerer absoluter Fehler (MAE)
+                                </span>
+                                <div style="position: relative; height: 320px; width: 100%;">
+                                    <canvas id="yesMaeChart"></canvas>
+                                </div>
+                                <p style="color: #78909c; font-size: 0.8rem; text-align: center; margin-top: 15px;">
+                                    Zeigt die Verringerung des durchschnittlichen absoluten Vorhersagefehlers (in Prozentpunkten).
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table of values -->
+                <div class="card" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                    <div class="card-content" style="padding: 24px;">
+                        <span class="card-title" style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.2rem; color: #263238; margin-bottom: 15px;">
+                            Simulationsdaten (Ja-Stimmen)
+                        </span>
+                        <table class="highlight responsive-table" style="font-size: 0.95rem;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #e0e0e0;">
+                                    <th style="font-weight: 700; color: #37474f;">Gemeinden (Schritt)</th>
+                                    <th style="font-weight: 700; color: #37474f;">MAE</th>
+                                    <th style="font-weight: 700; color: #37474f;">Mittlere Abweichung (Bias)</th>
+                                    <th style="font-weight: 700; color: #37474f;">10. Perz.</th>
+                                    <th style="font-weight: 700; color: #37474f;">25. Perz.</th>
+                                    <th style="font-weight: 700; color: #37474f;">Median</th>
+                                    <th style="font-weight: 700; color: #37474f;">75. Perz.</th>
+                                    <th style="font-weight: 700; color: #37474f;">90. Perz.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for step in active_report.steps_data %}
+                                <tr style="border-bottom: 1px solid #f2f2f2;">
+                                    <td style="font-weight: 600; font-family: 'Roboto Mono', monospace;">{{ step.step_size }} Gemeinden</td>
+                                    <td style="font-weight: 700; color: #1a237e;">{{ step.yes_mae|stringformat:".3f" }}%</td>
+                                    <td style="color: {% if step.yes_mean >= 0 %}#2e7d32{% else %}#c62828{% endif %}; font-family: 'Roboto Mono', monospace;">
+                                        {{ step.yes_mean|stringformat:"+0.3f" }}%
+                                    </td>
+                                    <td style="font-family: 'Roboto Mono', monospace;">{{ step.yes_p10|stringformat:"+0.3f" }}%</td>
+                                    <td style="font-family: 'Roboto Mono', monospace;">{{ step.yes_p25|stringformat:"+0.3f" }}%</td>
+                                    <td style="font-family: 'Roboto Mono', monospace; font-weight: 600;">{{ step.yes_p50|stringformat:"+0.3f" }}%</td>
+                                    <td style="font-family: 'Roboto Mono', monospace;">{{ step.yes_p75|stringformat:"+0.3f" }}%</td>
+                                    <td style="font-family: 'Roboto Mono', monospace;">{{ step.yes_p90|stringformat:"+0.3f" }}%</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: TURNOUT% METRICS -->
+            <div id="bet-metric" class="col s12" style="padding: 0;">
+                <div class="row">
+                    <!-- Chart 1: Error Bands -->
+                    <div class="col s12 l8">
+                        <div class="card" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                            <div class="card-content">
+                                <span class="card-title" style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.2rem; color: #263238; margin-bottom: 20px;">
+                                    Abweichung & Vertrauensbereiche (Stimmbeteiligung)
+                                </span>
+                                <div style="position: relative; height: 320px; width: 100%;">
+                                    <canvas id="betBandsChart"></canvas>
+                                </div>
+                                <p style="color: #78909c; font-size: 0.8rem; text-align: center; margin-top: 15px;">
+                                    Zeigt den Median-Fehler (Linie) und die Fehlerbänder für 50% CI (dunkel) und 80% CI (hell) über die Vorlagen hinweg.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Chart 2: MAE -->
+                    <div class="col s12 l4">
+                        <div class="card" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                            <div class="card-content">
+                                <span class="card-title" style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.2rem; color: #263238; margin-bottom: 20px;">
+                                    Mittlerer absoluter Fehler (MAE)
+                                </span>
+                                <div style="position: relative; height: 320px; width: 100%;">
+                                    <canvas id="betMaeChart"></canvas>
+                                </div>
+                                <p style="color: #78909c; font-size: 0.8rem; text-align: center; margin-top: 15px;">
+                                    Zeigt die Verringerung des durchschnittlichen absoluten Vorhersagefehlers (in Prozentpunkten).
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Table of values -->
+                <div class="card" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08);">
+                    <div class="card-content" style="padding: 24px;">
+                        <span class="card-title" style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.2rem; color: #263238; margin-bottom: 15px;">
+                            Simulationsdaten (Stimmbeteiligung)
+                        </span>
+                        <table class="highlight responsive-table" style="font-size: 0.95rem;">
+                            <thead>
+                                <tr style="border-bottom: 2px solid #e0e0e0;">
+                                    <th style="font-weight: 700; color: #37474f;">Gemeinden (Schritt)</th>
+                                    <th style="font-weight: 700; color: #37474f;">MAE</th>
+                                    <th style="font-weight: 700; color: #37474f;">Mittlere Abweichung (Bias)</th>
+                                    <th style="font-weight: 700; color: #37474f;">10. Perz.</th>
+                                    <th style="font-weight: 700; color: #37474f;">25. Perz.</th>
+                                    <th style="font-weight: 700; color: #37474f;">Median</th>
+                                    <th style="font-weight: 700; color: #37474f;">75. Perz.</th>
+                                    <th style="font-weight: 700; color: #37474f;">90. Perz.</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for step in active_report.steps_data %}
+                                <tr style="border-bottom: 1px solid #f2f2f2;">
+                                    <td style="font-weight: 600; font-family: 'Roboto Mono', monospace;">{{ step.step_size }} Gemeinden</td>
+                                    <td style="font-weight: 700; color: #00796b;">{{ step.bet_mae|stringformat:".3f" }}%</td>
+                                    <td style="color: {% if step.bet_mean >= 0 %}#2e7d32{% else %}#c62828{% endif %}; font-family: 'Roboto Mono', monospace;">
+                                        {{ step.bet_mean|stringformat:"+0.3f" }}%
+                                    </td>
+                                    <td style="font-family: 'Roboto Mono', monospace;">{{ step.bet_p10|stringformat:"+0.3f" }}%</td>
+                                    <td style="font-family: 'Roboto Mono', monospace;">{{ step.bet_p25|stringformat:"+0.3f" }}%</td>
+                                    <td style="font-family: 'Roboto Mono', monospace; font-weight: 600;">{{ step.bet_p50|stringformat:"+0.3f" }}%</td>
+                                    <td style="font-family: 'Roboto Mono', monospace;">{{ step.bet_p75|stringformat:"+0.3f" }}%</td>
+                                    <td style="font-family: 'Roboto Mono', monospace;">{{ step.bet_p90|stringformat:"+0.3f" }}%</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {% else %}
+            <!-- Empty State -->
+            <div class="card" style="border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); text-align: center; padding: 60px 20px;">
+                <div class="card-content">
+                    <i class="material-symbols-outlined" style="font-size: 5rem; color: #cfd8dc; margin-bottom: 20px;">query_stats</i>
+                    <h3 style="font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.8rem; color: #37474f;">Keine Berichte gefunden</h3>
+                    <p class="grey-text text-darken-1" style="max-width: 500px; margin: 15px auto 25px auto; font-size: 1.1rem; line-height: 1.6;">
+                        Es wurden noch keine Simulationsberichte für die Vorhersagegenauigkeit in der Datenbank gespeichert. Führen Sie den Simulationsbefehl aus, um Daten zu erzeugen:
+                    </p>
+                    <div style="background-color: #eceff1; padding: 15px; border-radius: 6px; max-width: 600px; margin: 0 auto; border-left: 4px solid #78909c; text-align: left;">
+                        <code style="font-family: 'Roboto Mono', monospace; font-size: 0.95rem; color: #263238; display: block; word-break: break-all;">
+                            python manage.py run_prediction_simulation --num-votes 10 --regions "CH ZH BE AG VD SG GR TI"
+                        </code>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Load Chart.js from CDN -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Materialize Tabs
+    const tabs = document.querySelectorAll('.tabs');
+    M.Tabs.init(tabs);
+
+    // Initialize Materialize Collapsibles
+    const collapsibles = document.querySelectorAll('.collapsible');
+    M.Collapsible.init(collapsibles, {
+        onOpenStart: function(el) {
+            el.querySelector('.keyboard-arrow').style.transform = 'rotate(180deg)';
+        },
+        onCloseStart: function(el) {
+            el.querySelector('.keyboard-arrow').style.transform = 'rotate(0deg)';
+        }
+    });
+
+    {% if active_report %}
+    // Extract steps data from Django context
+    const stepsData = {{ active_report.steps_data|safe }};
+    
+    const labels = stepsData.map(d => `${d.step_size} Gem.`);
+    const steps = stepsData.map(d => d.step_size);
+
+    // 1. Chart: YES Bands Chart
+    const yesBandsCtx = document.getElementById('yesBandsChart').getContext('2d');
+    new Chart(yesBandsCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: '90. Perzentil',
+                    data: stepsData.map(d => d.yes_p90),
+                    fill: false,
+                    borderColor: 'rgba(0,0,0,0)',
+                    pointRadius: 0,
+                    showLine: false
+                },
+                {
+                    label: '80% Konfidenzband (10-90)',
+                    data: stepsData.map(d => d.yes_p10),
+                    fill: '-1',
+                    backgroundColor: 'rgba(63, 81, 181, 0.12)',
+                    borderColor: 'rgba(0,0,0,0)',
+                    pointRadius: 0,
+                    showLine: false
+                },
+                {
+                    label: '75. Perzentil',
+                    data: stepsData.map(d => d.yes_p75),
+                    fill: false,
+                    borderColor: 'rgba(0,0,0,0)',
+                    pointRadius: 0,
+                    showLine: false
+                },
+                {
+                    label: '50% Konfidenzband (25-75)',
+                    data: stepsData.map(d => d.yes_p25),
+                    fill: '-1',
+                    backgroundColor: 'rgba(63, 81, 181, 0.25)',
+                    borderColor: 'rgba(0,0,0,0)',
+                    pointRadius: 0,
+                    showLine: false
+                },
+                {
+                    label: 'Median Abweichung',
+                    data: stepsData.map(d => d.yes_p50),
+                    borderColor: '#3f51b5',
+                    backgroundColor: '#1a237e',
+                    borderWidth: 2.5,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        filter: function(item, chart) {
+                            // Only show Median and Shaded Bands in legend
+                            return item.text.includes('Median') || item.text.includes('band');
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.raw.toFixed(3)}%`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Fehler (Prozentpunkte)',
+                        font: { weight: 'bold' }
+                    },
+                    grid: {
+                        color: function(context) {
+                            if (context.tick.value === 0) return '#000'; // highlight zero-line
+                            return '#e0e0e0';
+                        }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Gezählte Gemeinden (Smallest First)',
+                        font: { weight: 'bold' }
+                    }
+                }
+            }
+        }
+    });
+
+    // 2. Chart: YES MAE Chart
+    const yesMaeCtx = document.getElementById('yesMaeChart').getContext('2d');
+    new Chart(yesMaeCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'MAE Yes%',
+                data: stepsData.map(d => d.yes_mae),
+                borderColor: '#e91e63',
+                backgroundColor: 'rgba(233, 30, 99, 0.1)',
+                borderWidth: 2.5,
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    title: {
+                        display: true,
+                        text: 'Absolute Abweichung (%)',
+                        font: { weight: 'bold' }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Gemeinden',
+                        font: { weight: 'bold' }
+                    }
+                }
+            }
+        }
+    });
+
+    // 3. Chart: BET Bands Chart
+    const betBandsCtx = document.getElementById('betBandsChart').getContext('2d');
+    new Chart(betBandsCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [
+                {
+                    label: '90. Perzentil',
+                    data: stepsData.map(d => d.bet_p90),
+                    fill: false,
+                    borderColor: 'rgba(0,0,0,0)',
+                    pointRadius: 0,
+                    showLine: false
+                },
+                {
+                    label: '80% Konfidenzband (10-90)',
+                    data: stepsData.map(d => d.bet_p10),
+                    fill: '-1',
+                    backgroundColor: 'rgba(0, 150, 136, 0.12)',
+                    borderColor: 'rgba(0,0,0,0)',
+                    pointRadius: 0,
+                    showLine: false
+                },
+                {
+                    label: '75. Perzentil',
+                    data: stepsData.map(d => d.bet_p75),
+                    fill: false,
+                    borderColor: 'rgba(0,0,0,0)',
+                    pointRadius: 0,
+                    showLine: false
+                },
+                {
+                    label: '50% Konfidenzband (25-75)',
+                    data: stepsData.map(d => d.bet_p25),
+                    fill: '-1',
+                    backgroundColor: 'rgba(0, 150, 136, 0.25)',
+                    borderColor: 'rgba(0,0,0,0)',
+                    pointRadius: 0,
+                    showLine: false
+                },
+                {
+                    label: 'Median Abweichung',
+                    data: stepsData.map(d => d.bet_p50),
+                    borderColor: '#009688',
+                    backgroundColor: '#004d40',
+                    borderWidth: 2.5,
+                    fill: false,
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        filter: function(item, chart) {
+                            return item.text.includes('Median') || item.text.includes('band');
+                        }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.dataset.label}: ${context.raw.toFixed(3)}%`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Fehler (Prozentpunkte)',
+                        font: { weight: 'bold' }
+                    },
+                    grid: {
+                        color: function(context) {
+                            if (context.tick.value === 0) return '#000';
+                            return '#e0e0e0';
+                        }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Gezählte Gemeinden (Smallest First)',
+                        font: { weight: 'bold' }
+                    }
+                }
+            }
+        }
+    });
+
+    // 4. Chart: BET MAE Chart
+    const betMaeCtx = document.getElementById('betMaeChart').getContext('2d');
+    new Chart(betMaeCtx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'MAE Turnout%',
+                data: stepsData.map(d => d.bet_mae),
+                borderColor: '#009688',
+                backgroundColor: 'rgba(0, 150, 136, 0.1)',
+                borderWidth: 2.5,
+                fill: true,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                tension: 0.1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    min: 0,
+                    title: {
+                        display: true,
+                        text: 'Absolute Abweichung (%)',
+                        font: { weight: 'bold' }
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Gemeinden',
+                        font: { weight: 'bold' }
+                    }
+                }
+            }
+        }
+    });
+    {% endif %}
+});
+</script>
+
+<style>
+/* Custom styles to match digital organizing theme and look extremely premium */
+.collection-item {
+    cursor: pointer;
+}
+.collection-item:hover:not(.active) {
+    background-color: #f5f5f5 !important;
+}
+.tab a {
+    transition: background-color 0.2s ease;
+}
+.tab a:hover {
+    background-color: rgba(63, 81, 181, 0.05) !important;
+}
+th {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+tr {
+    transition: background-color 0.15s ease;
+}
+tbody tr:hover {
+    background-color: #fcfcfc !important;
+}
+</style>
+{% endblock %}

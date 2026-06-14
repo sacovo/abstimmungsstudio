@@ -210,6 +210,12 @@
                                     <td class="right-align number-cell" colspan="1"><strong
                                             x-text="projection.beteiligung"></strong></td>
                                 </tr>
+                                <tr x-show="latestTimelinePoint && latestTimelinePoint.ci_10 != null && latestTimelinePoint.ci_90 != null" style="display: none;">
+                                    <td colspan="1">Konfidenz (90%)</td>
+                                    <td class="right-align number-cell" colspan="2">
+                                        <strong x-text="`${latestTimelinePoint.ci_10.toFixed(1)}% bis ${latestTimelinePoint.ci_90.toFixed(1)}%`" style="color: #1565c0;"></strong>
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
@@ -312,6 +318,21 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Timeline Chart Card -->
+        <div class="card p-3" style="margin-top: 15px; display: none;" x-show="hasTimeline">
+            <div class="card-content">
+                <span class="card-title" style="margin-bottom: 15px; font-size: 1.1rem; display: flex; justify-content: space-between; align-items: center; font-weight: bold;">
+                    <span>Verlauf Hochrechnung</span>
+                    <button class="btn btn-small blue darken-3 waves-effect waves-light" @click="exportTimeline()" style="padding: 0 12px; height: 28px; line-height: 28px; border-radius: 4px; font-size: 0.8rem; text-transform: none;">
+                        <span>Export</span>
+                    </button>
+                </span>
+                <div style="position: relative; height: 200px; width: 100%;">
+                    <canvas id="timeline-chart"></canvas>
                 </div>
             </div>
         </div>

@@ -3,6 +3,8 @@ document.addEventListener('alpine:init', () => {
         final: { ja: 0, ja_pct: '0%', nein: 0, nein_pct: '0%', beteiligung: '0%' },
         projection: { ja: 0, ja_pct: '0%', nein: 0, nein_pct: '0%', beteiligung: '0%' },
         hasPrediction: false,
+        hasTimeline: false,
+        latestTimelinePoint: null,
 
         selectedGemeinde: null,
         gemeindeResult: null,
@@ -240,6 +242,7 @@ document.addEventListener('alpine:init', () => {
                 } else {
                     this.updateNationalChart(finalJa, finalNein, 0, 0);
                 }
+                this.updateTimelineChart();
             } catch (e) {
                 console.error("Error fetching results", e);
             }
@@ -422,6 +425,342 @@ document.addEventListener('alpine:init', () => {
                 });
             }
             return stimmen;
+        },
+
+        async updateTimelineChart() {
+            const ctx = document.getElementById('timeline-chart');
+            if (!ctx) return;
+
+            try {
+                const response = await fetch(`/api/abst/${this.vorlageId}/timeline`);
+                if (!response.ok) {
+                    this.hasTimeline = false;
+                    return;
+                }
+                const data = await response.json();
+                
+                if (data.length === 0) {
+                    this.latestTimelinePoint = null;
+                    this.hasTimeline = false;
+                    if (this.timelineChart) {
+                        this.timelineChart.destroy();
+                        this.timelineChart = null;
+                    }
+                    return;
+                }
+
+                this.latestTimelinePoint = data[data.length - 1];
+                this.hasTimeline = true;
+
+                const times = data.map(item => {
+                    const d = new Date(item.time * 1000);
+                    return d.toLocaleTimeString('de-CH', { hour: '2-digit', minute: '2-digit' });
+                });
+                const counted = data.map(item => item.counted_yes_prozent);
+                const projected = data.map(item => item.projected_yes_prozent);
+                const ci10 = data.map(item => item.ci_10);
+                const ci25 = data.map(item => item.ci_25);
+                const ci75 = data.map(item => item.ci_75);
+                const ci90 = data.map(item => item.ci_90);
+
+                if (this.timelineChart) {
+                    this.timelineChart.destroy();
+                }
+
+                this.timelineChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: times,
+                        datasets: [
+                            {
+                                label: '90% CI Obergrenze',
+                                data: ci90,
+                                borderColor: 'transparent',
+                                backgroundColor: 'transparent',
+                                fill: false,
+                                pointRadius: 0,
+                                tension: 0.1
+                            },
+                            {
+                                label: '90% CI Untergrenze',
+                                data: ci10,
+                                borderColor: 'transparent',
+                                backgroundColor: 'rgba(33, 150, 243, 0.08)',
+                                fill: '-1',
+                                pointRadius: 0,
+                                tension: 0.1
+                            },
+                            {
+                                label: '75% CI Obergrenze',
+                                data: ci75,
+                                borderColor: 'transparent',
+                                backgroundColor: 'transparent',
+                                fill: false,
+                                pointRadius: 0,
+                                tension: 0.1
+                            },
+                            {
+                                label: '75% CI Untergrenze',
+                                data: ci25,
+                                borderColor: 'transparent',
+                                backgroundColor: 'rgba(33, 150, 243, 0.2)',
+                                fill: '-1',
+                                pointRadius: 0,
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Gezählt',
+                                data: counted,
+                                borderColor: '#e53935',
+                                backgroundColor: '#e53935',
+                                borderWidth: 2,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 1
+                            },
+                            {
+                                label: 'Prognose',
+                                data: projected,
+                                borderColor: '#2196f3',
+                                backgroundColor: '#2196f3',
+                                borderWidth: 2.5,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 2
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        animation: { duration: 0 },
+                        scales: {
+                            y: {
+                                grace: '10%',
+                                ticks: {
+                                    callback: (val) => val.toFixed(1) + '%'
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)'
+                                }
+                            },
+                            x: {
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                labels: {
+                                    boxWidth: 12,
+                                    boxHeight: 12,
+                                    font: { size: 10 },
+                                    filter: (item) => ['Gezählt', 'Prognose'].includes(item.text)
+                                }
+                            },
+                            tooltip: {
+                                mode: 'index',
+                                intersect: false
+                            }
+                        }
+                    }
+                });
+
+            } catch (e) {
+                console.error("Error loading timeline chart data:", e);
+            }
+        },
+
+        async exportTimeline() {
+            if (!this.timelineChart) return;
+
+            const logoImg = new Image();
+            logoImg.src = "/static/abst/imgs/logo.png";
+            
+            const doExport = (useLogo) => {
+                const scale = 2;
+                const width = 800 * scale;
+                const height = 500 * scale;
+                
+                const exportCanvas = document.createElement("canvas");
+                const ctx = exportCanvas.getContext("2d");
+                exportCanvas.width = width;
+                exportCanvas.height = height;
+                
+                // Draw background
+                ctx.fillStyle = "#ffffff";
+                ctx.fillRect(0, 0, width, height);
+                
+                // Draw title
+                ctx.fillStyle = "#1e293b";
+                ctx.font = `bold ${20 * scale}px 'Outfit', sans-serif`;
+                ctx.fillText("Hochrechnungs-Verlauf", 40 * scale, 45 * scale);
+                
+                // Draw subtitle
+                ctx.fillStyle = "#64748b";
+                ctx.font = `${14 * scale}px 'Outfit', sans-serif`;
+                ctx.fillText("Prognose vs. Ausgezählt mit Konfidenzintervallen", 40 * scale, 70 * scale);
+                
+                // Draw logo with preserved aspect ratio
+                if (useLogo) {
+                    const logoW = 100 * scale;
+                    const aspect = logoImg.naturalWidth > 0 ? (logoImg.naturalHeight / logoImg.naturalWidth) : 0.34;
+                    const logoH = logoW * aspect;
+                    ctx.drawImage(logoImg, width - logoW - 40 * scale, 25 * scale, logoW, logoH);
+                }
+                
+                // Draw divider line
+                ctx.strokeStyle = "rgba(0, 0, 0, 0.1)";
+                ctx.lineWidth = 1 * scale;
+                ctx.beginPath();
+                ctx.moveTo(40 * scale, 90 * scale);
+                ctx.lineTo(width - 40 * scale, 90 * scale);
+                ctx.stroke();
+                
+                const chartX = 40 * scale;
+                const chartY = 110 * scale;
+                const chartW = width - (80 * scale);
+                const chartH = height - chartY - (40 * scale);
+                
+                // Create temporary offscreen canvas for rendering high-res chart
+                const tempCanvas = document.createElement("canvas");
+                tempCanvas.width = chartW;
+                tempCanvas.height = chartH;
+                
+                // Get data from current chart
+                const times = this.timelineChart.data.labels;
+                const ci90 = this.timelineChart.data.datasets[0].data;
+                const ci10 = this.timelineChart.data.datasets[1].data;
+                const ci75 = this.timelineChart.data.datasets[2].data;
+                const ci25 = this.timelineChart.data.datasets[3].data;
+                const counted = this.timelineChart.data.datasets[4].data;
+                const projected = this.timelineChart.data.datasets[5].data;
+                
+                const tempChart = new Chart(tempCanvas, {
+                    type: 'line',
+                    data: {
+                        labels: times,
+                        datasets: [
+                            {
+                                label: '90% CI Obergrenze',
+                                data: ci90,
+                                borderColor: 'transparent',
+                                backgroundColor: 'transparent',
+                                fill: false,
+                                pointRadius: 0,
+                                tension: 0.1
+                            },
+                            {
+                                label: '90% CI Untergrenze',
+                                data: ci10,
+                                borderColor: 'transparent',
+                                backgroundColor: 'rgba(33, 150, 243, 0.08)',
+                                fill: '-1',
+                                pointRadius: 0,
+                                tension: 0.1
+                            },
+                            {
+                                label: '75% CI Obergrenze',
+                                data: ci75,
+                                borderColor: 'transparent',
+                                backgroundColor: 'transparent',
+                                fill: false,
+                                pointRadius: 0,
+                                tension: 0.1
+                            },
+                            {
+                                label: '75% CI Untergrenze',
+                                data: ci25,
+                                borderColor: 'transparent',
+                                backgroundColor: 'rgba(33, 150, 243, 0.2)',
+                                fill: '-1',
+                                pointRadius: 0,
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Gezählt',
+                                data: counted,
+                                borderColor: '#e53935',
+                                backgroundColor: '#e53935',
+                                borderWidth: 2 * scale,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 1 * scale
+                            },
+                            {
+                                label: 'Prognose',
+                                data: projected,
+                                borderColor: '#2196f3',
+                                backgroundColor: '#2196f3',
+                                borderWidth: 2.5 * scale,
+                                fill: false,
+                                tension: 0.1,
+                                pointRadius: 2 * scale
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: false,
+                        devicePixelRatio: 1,
+                        animation: { duration: 0 },
+                        scales: {
+                            y: {
+                                grace: '10%',
+                                ticks: {
+                                    font: { size: 10 * scale },
+                                    callback: (val) => val.toFixed(1) + '%'
+                                },
+                                grid: {
+                                    color: 'rgba(0, 0, 0, 0.05)',
+                                    lineWidth: 1 * scale
+                                }
+                            },
+                            x: {
+                                ticks: {
+                                    font: { size: 10 * scale }
+                                },
+                                grid: {
+                                    display: false
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                display: true,
+                                labels: {
+                                    boxWidth: 12 * scale,
+                                    boxHeight: 12 * scale,
+                                    font: { size: 10 * scale },
+                                    filter: (item) => ['Gezählt', 'Prognose'].includes(item.text)
+                                }
+                            },
+                            tooltip: {
+                                enabled: false
+                            }
+                        }
+                    }
+                });
+                
+                // Draw the tempChart canvas to our high-res export canvas
+                ctx.drawImage(tempCanvas, chartX, chartY, chartW, chartH);
+                
+                // Destroy the tempChart instance
+                tempChart.destroy();
+                
+                const pngUrl = exportCanvas.toDataURL("image/png");
+                const downloadLink = document.createElement("a");
+                downloadLink.href = pngUrl;
+                const timestamp = new Date().toISOString().replace('T', '_').replace(/\..+/, '').replace(/:/g, '-');
+                downloadLink.download = "timeline_" + this.vorlageId + "_" + timestamp + ".png";
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            };
+
+            logoImg.onload = () => doExport(true);
+            logoImg.onerror = () => doExport(false);
         },
 
         async exportTable() {

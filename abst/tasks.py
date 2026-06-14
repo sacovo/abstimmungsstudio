@@ -73,3 +73,67 @@ def predict_results_task(vorlagen_id: int):
         print(
             f"Not enough known results (only {known_results}) for vorlage {vorlagen_id} to perform prediction."
         )
+
+
+@shared_task
+def cache_historical_votes_task():
+    import io
+    import polars as pl
+    from django.core.cache import cache
+    from .models import Vorlage
+    from .store import get_vorlagen_table
+
+    today = datetime.date.today()
+    tags = Abstimmungstag.objects.filter(date=today)
+    if not tags.exists():
+        print("Today is not a voting day. No historical votes cached.")
+        return
+
+    # Clear all other cached days from the registry
+    registry = cache.get("hist_records_registry", [])
+    for old_key in registry:
+        cache.delete(old_key)
+    cache.set("hist_records_registry", [])
+
+    # Cache past votes for today's tags
+    new_registry = []
+    for tag in tags:
+        cache_key = f"hist_records:{tag.date.isoformat()}"
+        print(f"Caching historical votes for tag date {tag.date}...")
+
+        historical_vorlagen = Vorlage.objects.filter(
+            kantonal=False,
+            finished=True,
+            tag__date__lt=tag.date
+        ).order_by("-tag__date")[:50]
+        hist_ids = list(historical_vorlagen.values_list("vorlagen_id", flat=True))
+        if hist_ids:
+            df_hist = get_vorlagen_table(hist_ids)
+            if not df_hist.is_empty():
+                bio = io.BytesIO()
+                df_hist.write_ipc(bio)
+                cache.set(cache_key, bio.getvalue(), timeout=86400 * 7)
+                new_registry.append(cache_key)
+                print(f"Successfully cached {len(hist_ids)} historical votes under key {cache_key}.")
+
+    cache.set("hist_records_registry", new_registry)
+
+
+@shared_task
+def ensure_projection_matrix_task():
+    """Daily task to ensure the newest Abstimmungstag has a projection matrix."""
+    tag = Abstimmungstag.objects.order_by("-date").first()
+    if not tag:
+        print("No Abstimmungstag found in database.")
+        return
+
+    has_proj = bool(tag.projection) and bool(tag.projection_bet)
+    if not has_proj:
+        print(f"Newest Abstimmungstag {tag.id} ({tag.date}) is missing projection matrices. Generating...")
+        try:
+            create_models(tag)
+            print(f"Successfully generated projection matrices for Abstimmungstag {tag.id} ({tag.date}).")
+        except Exception as e:
+            print(f"Error generating projection matrices for tag {tag.id}: {e}")
+    else:
+        print(f"Newest Abstimmungstag {tag.id} ({tag.date}) already has projection matrices.")

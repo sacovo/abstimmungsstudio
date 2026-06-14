@@ -17,7 +17,7 @@ class PredictTests(TestCase):
         results = [1.5, 2.0, 0.0, 0.0]
         mask = [False, False, True, True]
 
-        y_final = predict_missing_results(projection, results, mask)
+        y_final = predict_missing_results(projection, results, mask, alpha=0.0)
 
         self.assertAlmostEqual(y_final[0], 1.5)
         self.assertAlmostEqual(y_final[1], 2.0)

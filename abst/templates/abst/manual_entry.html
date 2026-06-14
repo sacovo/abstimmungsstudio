@@ -1,0 +1,351 @@
+{% extends 'abst/base.html' %}
+{% load static %}
+
+{% block title %}Resultate manuell erfassen{% endblock %}
+
+{% block nav %}
+{% include 'abst/includes/main_nav.html' %}
+{% endblock %}
+
+{% block content %}
+<article style="margin-top: 2rem;">
+    <div class="row">
+        <div class="col s12">
+            <h4>Resultate manuell erfassen</h4>
+            <p class="grey-text text-darken-1" style="margin-top: -0.5rem; font-size: 1.1rem;">
+                Erfassen von Ergebnissen für den Abstimmungstag vom <strong>{{ tag.date|date:"d.m.Y" }}</strong> ({{ tag.name }}).
+            </p>
+        </div>
+    </div>
+
+    {% if error %}
+    <div class="card red lighten-5">
+        <div class="card-content red-text text-darken-2">
+            <p>{{ error }}</p>
+        </div>
+    </div>
+    {% else %}
+    <div class="row" x-data="manualEntryForm({{ locations_json }})">
+        <!-- Form Column -->
+        <div class="col s12 l8">
+            <div class="card" style="border-radius: 12px;">
+                <div class="card-content">
+                    <span class="card-title" style="font-weight: 600; margin-bottom: 1.5rem;">Erfassungsformular</span>
+
+                    <!-- Vorlage Selection -->
+                    <div style="margin-bottom: 1.5rem;">
+                        <label for="vorlage-select" style="font-size: 0.9rem; font-weight: 500;">Abstimmungsvorlage</label>
+                        <select id="vorlage-select" class="browser-default" x-model="selectedVorlageId" @change="onVorlageChange()" style="margin-top: 0.5rem; height: 3rem; border-radius: 4px; border: 1px solid #e0e0e0;">
+                            <option value="" disabled selected>Bitte Vorlage wählen...</option>
+                            {% for v in vorlagen %}
+                                <option value="{{ v.vorlagen_id }}">{{ v.name }} ({{ v.region }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Location Autocomplete Dropdown -->
+                    <div style="position: relative; margin-bottom: 1.5rem;">
+                        <label for="location-search-input" style="font-size: 0.9rem; font-weight: 500;">Gemeinde oder Zählkreis</label>
+                        <input 
+                            id="location-search-input" 
+                            type="text" 
+                            placeholder="Tippen Sie den Namen oder die BFS-Nummer..." 
+                            x-model="locationSearch" 
+                            @input="onSearchInput"
+                            @focus="showLocationDropdown = true"
+                            @click.outside="showLocationDropdown = false"
+                            @keydown.escape="showLocationDropdown = false"
+                            @keydown.arrow-down.prevent="highlightedIndex = (highlightedIndex + 1) % filteredLocations.length"
+                            @keydown.arrow-up.prevent="highlightedIndex = (highlightedIndex - 1 + filteredLocations.length) % filteredLocations.length"
+                            @keydown.enter.prevent="if (highlightedIndex > -1) selectLocation(filteredLocations[highlightedIndex])"
+                            autocomplete="off"
+                            style="margin-top: 0.5rem; border: 1px solid #e0e0e0; border-radius: 4px; padding: 0 10px; box-sizing: border-box; height: 3rem;"
+                        >
+                        
+                        <!-- Autocomplete Dropdown List -->
+                        <ul 
+                            x-show="showLocationDropdown && filteredLocations.length > 0" 
+                            style="display: block; position: absolute; left: 0; right: 0; top: 100%; z-index: 1000; max-height: 250px; overflow-y: auto; background-color: #ffffff; border: 1px solid #e0e0e0; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 4px; padding: 0; margin: 0; list-style-type: none;"
+                        >
+                            <template x-for="(loc, idx) in filteredLocations" :key="loc.geo_id">
+                                <li 
+                                    :class="idx === highlightedIndex ? 'grey lighten-3' : ''"
+                                    @mousedown="selectLocation(loc)" 
+                                    @mouseenter="highlightedIndex = idx"
+                                    style="cursor: pointer; padding: 10px 15px; border-bottom: 1px solid #f5f5f5;"
+                                >
+                                    <span style="font-weight: 500; color: #212121;" x-text="loc.name"></span> 
+                                    <span class="grey-text text-darken-1" x-text="' (' + loc.kanton + ') [BFS: ' + loc.geo_id + '] - ' + loc.type"></span>
+                                </li>
+                            </template>
+                        </ul>
+                    </div>
+
+                    <!-- Alerts & Messages -->
+                    <div x-show="info" class="card blue lighten-5" x-cloak style="margin-bottom: 1.5rem; border-radius: 6px;">
+                        <div class="card-content blue-text text-darken-4" style="padding: 12px 15px;">
+                            <p style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="material-symbols-outlined" style="font-size: 1.2rem;">info</i>
+                                <span x-text="info"></span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div x-show="error" class="card red lighten-5" x-cloak style="margin-bottom: 1.5rem; border-radius: 6px;">
+                        <div class="card-content red-text text-darken-4" style="padding: 12px 15px;">
+                            <p style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="material-symbols-outlined" style="font-size: 1.2rem;">error</i>
+                                <span x-text="error"></span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div x-show="message" class="card green lighten-5" x-cloak style="margin-bottom: 1.5rem; border-radius: 6px;">
+                        <div class="card-content green-text text-darken-4" style="padding: 12px 15px;">
+                            <p style="display: flex; align-items: center; gap: 0.5rem;">
+                                <i class="material-symbols-outlined" style="font-size: 1.2rem;">check_circle</i>
+                                <span x-text="message"></span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Vote Count Inputs -->
+                    <div class="row" style="margin-bottom: 0;">
+                        <div class="input-field col s12 m4">
+                            <input id="ja-stimmen" type="number" min="0" x-model="jaStimmen" style="border: 1px solid #e0e0e0; border-radius: 4px; padding: 0 10px; box-sizing: border-box; height: 3rem;">
+                            <label for="ja-stimmen" :class="{'active': jaStimmen !== ''}" style="margin-left: 10px;">Ja-Stimmen</label>
+                        </div>
+                        <div class="input-field col s12 m4">
+                            <input id="nein-stimmen" type="number" min="0" x-model="neinStimmen" style="border: 1px solid #e0e0e0; border-radius: 4px; padding: 0 10px; box-sizing: border-box; height: 3rem;">
+                            <label for="nein-stimmen" :class="{'active': neinStimmen !== ''}" style="margin-left: 10px;">Nein-Stimmen</label>
+                        </div>
+                        <div class="input-field col s12 m4">
+                            <input id="eligible-voters" type="number" min="0" x-model="eligibleVoters" style="border: 1px solid #e0e0e0; border-radius: 4px; padding: 0 10px; box-sizing: border-box; height: 3rem;">
+                            <label for="eligible-voters" :class="{'active': eligibleVoters !== ''}" style="margin-left: 10px;">Stimmberechtigte</label>
+                        </div>
+                    </div>
+
+                    <!-- Calculated Percentages Preview -->
+                    <div x-show="jaStimmen !== '' && neinStimmen !== '' && eligibleVoters !== ''" class="grey-text" x-cloak style="margin-top: 1rem; margin-bottom: 1.5rem; font-size: 0.95rem;">
+                        <span style="font-weight: 500; margin-right: 0.5rem;">Berechnete Werte:</span>
+                        <div style="display: inline-flex; gap: 0.5rem;">
+                            <span class="badge blue white-text" style="float: none; position: static; font-weight: 600; border-radius: 4px;" x-text="'Ja: ' + ((parseInt(jaStimmen) / (parseInt(jaStimmen) + parseInt(neinStimmen)) * 100) || 0).toFixed(2) + '%'"></span>
+                            <span class="badge green white-text" style="float: none; position: static; font-weight: 600; border-radius: 4px;" x-text="'Beteiligung: ' + (((parseInt(jaStimmen) + parseInt(neinStimmen)) / parseInt(eligibleVoters) * 100) || 0).toFixed(2) + '%'"></span>
+                        </div>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="card-action" style="padding: 1.5rem 0 0 0; border-top: 1px solid rgba(0,0,0,0.1); display: flex; justify-content: flex-end;">
+                        <button class="btn waves-effect waves-light" style="border-radius: 6px; display: flex; align-items: center; gap: 0.5rem; height: 3rem; text-transform: none; font-weight: 600;" @click="submitResult()" :disabled="loading">
+                            <i class="material-symbols-outlined" x-show="!loading">save</i>
+                            <span x-show="!loading">Resultat speichern</span>
+                            <span x-show="loading">Wird gespeichert...</span>
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Info/Instructions Column -->
+        <div class="col s12 l4">
+            <div class="card blue-grey darken-1" style="border-radius: 12px; color: #ffffff;">
+                <div class="card-content">
+                    <span class="card-title" style="font-weight: 600; color: #ffffff; display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="material-symbols-outlined">info</i>Anleitung
+                    </span>
+                    <p style="margin-top: 1rem; line-height: 1.6;">
+                        Auf dieser Seite können Sie Abstimmungsresultate einzelner Gemeinden manuell eintragen. Das ist nützlich, wenn die offizielle API noch keine Zahlen liefert.
+                    </p>
+                    <ul style="margin-top: 1.5rem; padding-left: 1.2rem; list-style-type: disc;">
+                        <li style="margin-bottom: 0.8rem;">
+                            <strong>Aktuellster Tag</strong>: Die Erfassung ist auf den aktuellsten Abstimmungstag eingeschränkt ({{ tag.date|date:"d.m.Y" }}).
+                        </li>
+                        <li style="margin-bottom: 0.8rem;">
+                            <strong>Echtes Feedback</strong>: Wenn Sie eine Gemeinde auswählen, wird geprüft, ob bereits Daten vorhanden sind. Ist dies der Fall, können Sie diese überschreiben.
+                        </li>
+                        <li style="margin-bottom: 0.8rem;">
+                            <strong>Hintergrund-Berechnung</strong>: Sobald genügend Gemeinden final ausgezählt sind (mindestens 3), startet das System im Hintergrund automatisch die Hochrechnung (Prediction).
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</article>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('manualEntryForm', (locationsJson) => ({
+        locations: locationsJson,
+        selectedVorlageId: '',
+        locationSearch: '',
+        selectedLocation: null,
+        showLocationDropdown: false,
+        highlightedIndex: -1,
+
+        jaStimmen: '',
+        neinStimmen: '',
+        eligibleVoters: '',
+
+        loading: false,
+        message: '',
+        error: '',
+        info: '',
+
+        get filteredLocations() {
+            if (!this.locationSearch) return [];
+            const query = this.locationSearch.toLowerCase().trim();
+            return this.locations.filter(loc => 
+                loc.name.toLowerCase().includes(query) || 
+                loc.kanton.toLowerCase().includes(query) || 
+                String(loc.geo_id).includes(query)
+            ).slice(0, 15);
+        },
+
+        async selectLocation(loc) {
+            this.selectedLocation = loc;
+            this.locationSearch = `${loc.name} (${loc.kanton}) [BFS Nr. ${loc.geo_id}]`;
+            this.showLocationDropdown = false;
+            this.highlightedIndex = -1;
+            this.message = '';
+            this.error = '';
+            this.info = '';
+
+            await this.fetchExistingResult();
+        },
+
+        onSearchInput() {
+            this.selectedLocation = null;
+            this.showLocationDropdown = true;
+            this.highlightedIndex = -1;
+            this.jaStimmen = '';
+            this.neinStimmen = '';
+            this.eligibleVoters = '';
+            this.info = '';
+        },
+
+        async onVorlageChange() {
+            this.message = '';
+            this.error = '';
+            this.info = '';
+            await this.fetchExistingResult();
+        },
+
+        async fetchExistingResult() {
+            if (!this.selectedVorlageId || !this.selectedLocation) return;
+            
+            try {
+                const res = await fetch(`/api/abst/vorlagen/${this.selectedVorlageId}/gemeinden/${this.selectedLocation.geo_id}/result`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.exists) {
+                        this.jaStimmen = data.ja_stimmen;
+                        this.neinStimmen = data.nein_stimmen;
+                        this.eligibleVoters = data.anzahl_stimmberechtigte;
+                        this.info = 'Ein Resultat existiert bereits für diese Gemeinde und wird beim Speichern überschrieben.';
+                    } else if (data.anzahl_stimmberechtigte) {
+                        this.jaStimmen = '';
+                        this.neinStimmen = '';
+                        this.eligibleVoters = data.anzahl_stimmberechtigte;
+                        this.info = 'Stimmberechtigte wurden aus historischen Daten vorausgefüllt.';
+                    } else {
+                        this.jaStimmen = '';
+                        this.neinStimmen = '';
+                        this.eligibleVoters = '';
+                    }
+                    this.$nextTick(() => {
+                        M.updateTextFields();
+                    });
+                }
+            } catch (err) {
+                console.error("Fehler beim Abrufen bestehender Daten:", err);
+            }
+        },
+
+        async submitResult() {
+            this.message = '';
+            this.error = '';
+
+            if (!this.selectedVorlageId) {
+                this.error = 'Bitte wählen Sie eine Vorlage aus.';
+                return;
+            }
+            if (!this.selectedLocation) {
+                this.error = 'Bitte wählen Sie eine Gemeinde aus.';
+                return;
+            }
+            if (this.jaStimmen === '' || this.jaStimmen < 0) {
+                this.error = 'Bitte geben Sie eine gültige Anzahl Ja-Stimmen ein.';
+                return;
+            }
+            if (this.neinStimmen === '' || this.neinStimmen < 0) {
+                this.error = 'Bitte geben Sie eine gültige Anzahl Nein-Stimmen ein.';
+                return;
+            }
+            if (this.eligibleVoters === '' || this.eligibleVoters < 0) {
+                this.error = 'Bitte geben Sie eine gültige Anzahl Stimmberechtigte ein.';
+                return;
+            }
+
+            const ja = parseInt(this.jaStimmen);
+            const nein = parseInt(this.neinStimmen);
+            const stimm = parseInt(this.eligibleVoters);
+
+            if (ja + nein > stimm) {
+                this.error = 'Die Summe aus Ja- und Nein-Stimmen darf nicht grösser als die Anzahl Stimmberechtigter sein.';
+                return;
+            }
+
+            this.loading = true;
+            try {
+                const res = await fetch('/api/abst/manual-result', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCsrfToken(),
+                    },
+                    body: JSON.stringify({
+                        vorlage_id: parseInt(this.selectedVorlageId),
+                        geo_id: this.selectedLocation.geo_id,
+                        ja_stimmen: ja,
+                        nein_stimmen: nein,
+                        anzahl_stimmberechtigte: stimm
+                    })
+                });
+
+                if (!res.ok) {
+                    const errBody = await res.json().catch(() => ({}));
+                    throw new Error(errBody.detail || 'Fehler beim Speichern.');
+                }
+
+                this.message = 'Resultat erfolgreich erfasst und Prognose im Hintergrund gestartet!';
+                // Clear location & numbers
+                this.locationSearch = '';
+                this.selectedLocation = null;
+                this.jaStimmen = '';
+                this.neinStimmen = '';
+                this.eligibleVoters = '';
+                this.info = '';
+                this.$nextTick(() => {
+                    M.updateTextFields();
+                });
+            } catch (err) {
+                this.error = err.message || 'Fehler beim Speichern.';
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        getCsrfToken() {
+            const cookieValue = document.cookie
+                .split('; ')
+                .find(row => row.startsWith('csrftoken='))
+                ?.split('=')[1];
+            return cookieValue || '';
+        }
+    }));
+});
+</script>
+{% endblock %}

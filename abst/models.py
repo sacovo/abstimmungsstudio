@@ -129,3 +129,18 @@ class Partei(models.Model):
 
     class Meta:
         ordering = ["name"]
+
+
+class PredictionEvaluationReport(models.Model):
+    region = models.CharField(max_length=10)  # e.g., "CH", "ZH", "BE", "AG"
+    created_at = models.DateTimeField(auto_now_add=True)
+    num_votes = models.IntegerField()
+    vote_ids = models.JSONField()
+    steps_data = models.JSONField()  # Holds stats for each step (Yes/Turnout MAE, percentiles, etc.)
+
+    def __str__(self):
+        return f"PredictionEvaluationReport({self.region}, votes={self.num_votes}, {self.created_at:%Y-%m-%d %H:%M})"
+
+    class Meta:
+        ordering = ["-created_at"]
+

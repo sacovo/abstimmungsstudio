@@ -1148,3 +1148,69 @@ def get_vorlagen_table(vorlagen_ids: list[int]):
     )
 
     return pivoted.with_columns(pl.col("geo_id").cast(pl.Int32)).sort("geo_id")
+
+
+def store_national_summary(
+    vorlage_id: int,
+    timestamp: float,
+    counted_yes: float,
+    counted_bet: float,
+    projected_yes: float,
+    projected_bet: float,
+    ci_10: float,
+    ci_25: float,
+    ci_75: float,
+    ci_90: float,
+    mae: float,
+):
+    with get_influx_client() as client:
+        write_api = client.write_api(write_options=SYNCHRONOUS)
+        point = {
+            "measurement": "national_prediction_summary",
+            "tags": {
+                "vorlage_id": str(vorlage_id),
+            },
+            "fields": {
+                "counted_yes_prozent": float(counted_yes),
+                "counted_stimmbeteiligung": float(counted_bet),
+                "projected_yes_prozent": float(projected_yes),
+                "projected_stimmbeteiligung": float(projected_bet),
+                "ci_10": float(ci_10),
+                "ci_25": float(ci_25),
+                "ci_75": float(ci_75),
+                "ci_90": float(ci_90),
+                "mae": float(mae),
+            },
+            "time": int(timestamp * 1_000_000_000),
+        }
+        write_api.write(bucket=settings.INFLUX_BUCKET, record=point)
+
+
+def get_national_timeline(abst_id: int):
+    with get_influx_client() as client:
+        query_api = client.query_api()
+        query = f'''
+        from(bucket: "{settings.INFLUX_BUCKET}")
+          |> range(start: -100y)
+          |> filter(fn: (r) => r._measurement == "national_prediction_summary" and r.vorlage_id == "{abst_id}")
+          |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+          |> sort(columns: ["_time"], desc: false)
+        '''
+        result = query_api.query_data_frame(query)
+        if isinstance(result, list):
+            import pandas as pd
+            if len(result) == 0:
+                return []
+            result = pd.concat(result)
+        if result.empty:
+            return []
+            
+        result = (
+            pl.from_pandas(result)
+            .with_columns(
+                time=pl.col("_time").cast(pl.Int64) // 1_000_000,
+            )
+            .drop("result", "table", "_start", "_stop", "_measurement", "vorlage_id")
+            .sort("time")
+        )
+        return result.to_dicts()

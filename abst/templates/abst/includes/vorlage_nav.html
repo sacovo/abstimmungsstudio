@@ -38,6 +38,11 @@
                 <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
             </a>
         </li>
+        <li>
+            <a href="{% url 'abst:manual_entry' %}">
+                <i class="material-symbols-outlined left">edit_note</i>Resultate erfassen
+            </a>
+        </li>
         {% endif %}
         
         <!-- Search Dropdown -->
@@ -92,6 +97,11 @@
         <li>
             <a href="{% url 'abst:vorlage_behavior' vorlage.vorlagen_id %}">
                 <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:manual_entry' %}">
+                <i class="material-symbols-outlined left">edit_note</i>Resultate erfassen
             </a>
         </li>
         {% endif %}

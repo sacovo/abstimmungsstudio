@@ -283,6 +283,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "abst.tasks.update_metadata",
         "schedule": crontab(hour="5"),
     },
+    "ensure-projection-matrix-daily": {
+        "task": "abst.tasks.ensure_projection_matrix_task",
+        "schedule": crontab(hour="6", minute="0"),
+    },
+    "cache-historical-votes-daily": {
+        "task": "abst.tasks.cache_historical_votes_task",
+        "schedule": crontab(hour="8", minute="0"),
+    },
 }
 
 

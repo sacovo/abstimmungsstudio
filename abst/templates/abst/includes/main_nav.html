@@ -22,6 +22,18 @@
             </a>
         </li>
         <li>
+            <a href="{% url 'abst:evaluation' %}">
+                <i class="material-symbols-outlined left">query_stats</i>Evaluation
+            </a>
+        </li>
+        {% if user.is_authenticated %}
+        <li>
+            <a href="{% url 'abst:manual_entry' %}">
+                <i class="material-symbols-outlined left">edit_note</i>Resultate erfassen
+            </a>
+        </li>
+        {% endif %}
+        <li>
             <a class="dropdown-trigger" href="#!" data-target="tage-dropdown" x-ref="tageDropdownTrigger">
                 <i class="material-symbols-outlined left">calendar_month</i>Abstimmungstage
             </a>
@@ -52,6 +64,18 @@
                 <i class="material-symbols-outlined left">public</i>Wahlen
             </a>
         </li>
+        <li>
+            <a href="{% url 'abst:evaluation' %}">
+                <i class="material-symbols-outlined left">query_stats</i>Evaluation
+            </a>
+        </li>
+        {% if user.is_authenticated %}
+        <li>
+            <a href="{% url 'abst:manual_entry' %}">
+                <i class="material-symbols-outlined left">edit_note</i>Resultate erfassen
+            </a>
+        </li>
+        {% endif %}
         <li>
             <div style="padding: 0 16px 8px 16px;">
                 <label for="mobile-tage-select">Abstimmungstage</label>
