@@ -90,9 +90,8 @@ class APIKeyMiddleware:
 
 
 
-# 1. Getting current votes (latest voting day) for CH and all regions
 @mcp.tool()
-def get_current_votes(region: str = None) -> list[dict]:
+def get_current_votes(region: str = "") -> list[dict]:
     """
     Get the list of votes (vorlagen) for the latest voting day.
     
@@ -220,7 +219,7 @@ def perform_correlation_analysis(vorlage_id: int, selected_metric: str = "ja_pro
 
 # 4. For one specific or all communes of a vote get one or multiple columns of the commune stats
 @mcp.tool()
-def get_commune_statistics(vorlage_id: int, columns: list[str], geo_id: int = None) -> list[dict]:
+def get_commune_statistics(vorlage_id: int, columns: list[str], geo_id: int = 0) -> list[dict]:
     """
     Get demographic/socioeconomic/geographic statistics for one or all communes of a vote.
     
@@ -244,7 +243,7 @@ def get_commune_statistics(vorlage_id: int, columns: list[str], geo_id: int = No
         
         # Fetch communes
         communes = Gemeinde.objects.filter(stand=vorlage.tag.stand)
-        if geo_id is not None:
+        if geo_id:
             communes = communes.filter(geo_id=geo_id)
         
         commune_info = {
@@ -281,7 +280,7 @@ def get_commune_statistics(vorlage_id: int, columns: list[str], geo_id: int = No
 
 # 5. Get the per commune result for a vote (turnout and yes percentage and population allowed to vote)
 @mcp.tool()
-def get_commune_results_for_vote(vorlage_id: int, geo_id: int = None) -> list[dict]:
+def get_commune_results_for_vote(vorlage_id: int, geo_id: int = 0) -> list[dict]:
     """
     Get the per-commune results (turnout, yes percentage, and eligible voters) for a vote.
     
@@ -298,12 +297,12 @@ def get_commune_results_for_vote(vorlage_id: int, geo_id: int = None) -> list[di
         if df_results is None or df_results.is_empty():
             return []
         
-        if geo_id is not None:
+        if geo_id:
             df_results = df_results.filter(pl.col("geo_id") == geo_id)
         
         # Load names/cantons
         communes = Gemeinde.objects.filter(stand=vorlage.tag.stand)
-        if geo_id is not None:
+        if geo_id:
             communes = communes.filter(geo_id=geo_id)
         commune_info = {
             c["geo_id"]: {"name": c["name"], "kanton": c["kanton"]}
@@ -345,7 +344,7 @@ def get_commune_results_for_vote(vorlage_id: int, geo_id: int = None) -> list[di
 def perform_waehlerwanderung(
     vorlage_id: int,
     source_type: Literal["vote", "election"],
-    source_id: int = None,
+    source_id: int = 0,
     wahlen_scope: Literal["partei", "parteigruppe", "lager"] = "partei"
 ) -> dict:
     """
