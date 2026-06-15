@@ -1,3 +1,5 @@
+from abst.admin import AbstimmungstagAdmin
+from django.contrib.admin import AdminSite
 import numpy as np
 from django.test import TestCase
 from unittest.mock import patch
@@ -31,7 +33,8 @@ class BehaviorTests(TestCase):
         from abst.behavior import get_behavior_options
         from abst.models import GeoStand, Abstimmungstag, Vorlage
 
-        gs = GeoStand.objects.create(url="http://test.com", date=datetime.date(2025, 1, 1))
+        gs = GeoStand.objects.create(
+            url="http://test.com", date=datetime.date(2025, 1, 1))
 
         # 1. Target vote after the election date (2023-10-22)
         tag_after = Abstimmungstag.objects.create(
@@ -97,7 +100,8 @@ class BehaviorTests(TestCase):
         from abst.behavior import calculate_behavior
         from abst.models import GeoStand, Abstimmungstag, Vorlage, Gemeinde
 
-        gs = GeoStand.objects.create(url="http://test.com", date=datetime.date(2025, 1, 1))
+        gs = GeoStand.objects.create(
+            url="http://test.com", date=datetime.date(2025, 1, 1))
         tag = Abstimmungstag.objects.create(
             date=datetime.date(2025, 11, 30),
             name="Tag Test",
@@ -185,7 +189,8 @@ class BehaviorTests(TestCase):
         from abst.behavior import calculate_behavior
         from abst.models import GeoStand, Abstimmungstag, Vorlage, Gemeinde, Partei
 
-        gs = GeoStand.objects.create(url="http://test.com", date=datetime.date(2025, 1, 1))
+        gs = GeoStand.objects.create(
+            url="http://test.com", date=datetime.date(2025, 1, 1))
         tag = Abstimmungstag.objects.create(
             date=datetime.date(2025, 11, 30),
             name="Tag Test",
@@ -223,7 +228,7 @@ class BehaviorTests(TestCase):
             "ja_prozent": [50.0] * 6,
             "stimmbeteiligung": [66.7] * 6,
         })
-        
+
         # 50% strength for SVP, 50% for SP
         election_df = pl.DataFrame({
             "geo_id": list(range(1, 7)),
@@ -263,7 +268,8 @@ class BehaviorTests(TestCase):
         from abst.behavior import generate_behavior_excel
         from abst.models import GeoStand, Abstimmungstag, Vorlage, Gemeinde
 
-        gs = GeoStand.objects.create(url="http://test.com", date=datetime.date(2025, 1, 1))
+        gs = GeoStand.objects.create(
+            url="http://test.com", date=datetime.date(2025, 1, 1))
         tag = Abstimmungstag.objects.create(
             date=datetime.date(2025, 11, 30),
             name="Tag Test",
@@ -285,17 +291,27 @@ class BehaviorTests(TestCase):
         )
 
         # Create municipalities in two cantons: Zürich and Bern
-        Gemeinde.objects.create(geo_id=1, name="Zürich Stadt", kanton="Zürich", kanton_id=1, stand=gs)
-        Gemeinde.objects.create(geo_id=2, name="Winterthur", kanton="Zürich", kanton_id=1, stand=gs)
-        Gemeinde.objects.create(geo_id=3, name="Bülach", kanton="Zürich", kanton_id=1, stand=gs)
-        Gemeinde.objects.create(geo_id=4, name="Uster", kanton="Zürich", kanton_id=1, stand=gs)
-        Gemeinde.objects.create(geo_id=5, name="Horgen", kanton="Zürich", kanton_id=1, stand=gs)
-        
-        Gemeinde.objects.create(geo_id=6, name="Bern Stadt", kanton="Bern", kanton_id=2, stand=gs)
-        Gemeinde.objects.create(geo_id=7, name="Biel", kanton="Bern", kanton_id=2, stand=gs)
-        Gemeinde.objects.create(geo_id=8, name="Thun", kanton="Bern", kanton_id=2, stand=gs)
-        Gemeinde.objects.create(geo_id=9, name="Köniz", kanton="Bern", kanton_id=2, stand=gs)
-        Gemeinde.objects.create(geo_id=10, name="Burgdorf", kanton="Bern", kanton_id=2, stand=gs)
+        Gemeinde.objects.create(
+            geo_id=1, name="Zürich Stadt", kanton="Zürich", kanton_id=1, stand=gs)
+        Gemeinde.objects.create(
+            geo_id=2, name="Winterthur", kanton="Zürich", kanton_id=1, stand=gs)
+        Gemeinde.objects.create(geo_id=3, name="Bülach",
+                                kanton="Zürich", kanton_id=1, stand=gs)
+        Gemeinde.objects.create(geo_id=4, name="Uster",
+                                kanton="Zürich", kanton_id=1, stand=gs)
+        Gemeinde.objects.create(geo_id=5, name="Horgen",
+                                kanton="Zürich", kanton_id=1, stand=gs)
+
+        Gemeinde.objects.create(
+            geo_id=6, name="Bern Stadt", kanton="Bern", kanton_id=2, stand=gs)
+        Gemeinde.objects.create(geo_id=7, name="Biel",
+                                kanton="Bern", kanton_id=2, stand=gs)
+        Gemeinde.objects.create(geo_id=8, name="Thun",
+                                kanton="Bern", kanton_id=2, stand=gs)
+        Gemeinde.objects.create(geo_id=9, name="Köniz",
+                                kanton="Bern", kanton_id=2, stand=gs)
+        Gemeinde.objects.create(
+            geo_id=10, name="Burgdorf", kanton="Bern", kanton_id=2, stand=gs)
 
         # Mock results dataframes
         target_df = pl.DataFrame({
@@ -327,13 +343,13 @@ class BehaviorTests(TestCase):
         mock_get_abst_results.side_effect = side_effect
 
         excel_bytes = generate_behavior_excel(7001, "vote", 7002)
-        
+
         import zipfile
         import re
         with zipfile.ZipFile(io.BytesIO(excel_bytes)) as z:
             workbook_xml = z.read("xl/workbook.xml").decode("utf-8")
             sheet_names = re.findall(r'name="([^"]+)"', workbook_xml)
-        
+
         self.assertIn("Wählerwanderung (Absolut)", sheet_names)
         self.assertIn("Wählerwanderung (Prozent)", sheet_names)
         self.assertIn("Kantonale Übersicht (Absolut)", sheet_names)
@@ -341,10 +357,6 @@ class BehaviorTests(TestCase):
         self.assertIn("Zürich", sheet_names)
         self.assertIn("Bern", sheet_names)
 
-
-from unittest.mock import patch
-from django.contrib.admin import AdminSite
-from abst.admin import AbstimmungstagAdmin
 
 class AdminActionTests(TestCase):
     def setUp(self):
@@ -358,7 +370,8 @@ class AdminActionTests(TestCase):
         import datetime
         from abst.models import GeoStand, Abstimmungstag
 
-        gs = GeoStand.objects.create(url="http://test.com", date=datetime.date(2025, 1, 1))
+        gs = GeoStand.objects.create(
+            url="http://test.com", date=datetime.date(2025, 1, 1))
         tag = Abstimmungstag.objects.create(
             date=datetime.date(2025, 11, 30),
             name="Tag Test",
@@ -366,7 +379,7 @@ class AdminActionTests(TestCase):
         )
 
         admin_inst = AbstimmungstagAdmin(Abstimmungstag, self.site)
-        
+
         # Mock request
         from django.test import RequestFactory
         factory = RequestFactory()
@@ -374,12 +387,13 @@ class AdminActionTests(TestCase):
 
         # Call the action
         response = admin_inst.generate_projection(request, tag.id)
-        
+
         # Assertions
         mock_create_models.assert_called_once_with(tag)
         mock_messages.success.assert_called_once()
         self.assertEqual(response.status_code, 302)
-        self.assertIn(f"/admin/abst/abstimmungstag/{tag.id}/change/", response.url)
+        self.assertIn(
+            f"/admin/abst/abstimmungstag/{tag.id}/change/", response.url)
 
 
 class KantonalImportTests(TestCase):
@@ -387,8 +401,9 @@ class KantonalImportTests(TestCase):
     def test_fetch_results_kantonal_includes_zaehlkreise(self, mock_get):
         from abst.store import fetch_results_kantonal
         from abst.models import Kanton
-        
-        Kanton.objects.create(name="Zürich", short="ZH", kanton_id=1, lang_code="de")
+
+        Kanton.objects.create(name="Zürich", short="ZH",
+                              kanton_id=1, lang_code="de")
 
         # Mock JSON data
         mock_json = {
@@ -438,241 +453,25 @@ class KantonalImportTests(TestCase):
                 }
             ]
         }
-        
+
         mock_response = mock_get.return_value
         mock_response.json.return_value = mock_json
-        
+
         results, vorlagen = fetch_results_kantonal("http://mock-url.json")
-        
+
         self.assertEqual(len(vorlagen), 1)
         self.assertEqual(vorlagen[0].vorlagen_id, 1234)
         self.assertTrue(vorlagen[0].has_zk)
-        
+
         # Should have 2 results: 1 gemeinde + 1 zaehlkreis
         self.assertEqual(len(results), 2)
-        
+
         geo_ids = [r.geo_id for r in results]
         self.assertIn(1, geo_ids)
         self.assertIn(10230, geo_ids)
-        
+
         # Verify zaehlkreis data
         zk_res = next(r for r in results if r.geo_id == 10230)
         self.assertEqual(zk_res.result.ja_stimmen, 300)
         self.assertEqual(zk_res.result.nein_stimmen, 200)
         self.assertEqual(zk_res.result.stimmbeteiligung, 50.0)
-
-
-class MCPToolsTests(TestCase):
-    def setUp(self):
-        import datetime
-        from abst.models import GeoStand, Abstimmungstag, Vorlage, Gemeinde
-        self.gs = GeoStand.objects.create(url="http://test.com", date=datetime.date(2026, 6, 14))
-        self.tag = Abstimmungstag.objects.create(
-            date=datetime.date(2026, 6, 14),
-            name="Test Voting Day",
-            stand=self.gs
-        )
-        self.vorlage = Vorlage.objects.create(
-            name="Test Vote",
-            vorlagen_id=9999,
-            tag=self.tag,
-            region="CH",
-            finished=True
-        )
-        self.gemeinde = Gemeinde.objects.create(
-            name="Test Commune",
-            geo_id=1,
-            kanton="ZH",
-            kanton_id=1,
-            stand=self.gs
-        )
-
-    def test_get_current_votes(self):
-        from abst.management.commands.run_mcp import get_current_votes
-        res = get_current_votes()
-        self.assertEqual(len(res), 1)
-        self.assertEqual(res[0]["vorlagen_id"], 9999)
-        self.assertEqual(res[0]["name"], "Test Vote")
-
-        res_filtered = get_current_votes(region="ZH")
-        self.assertEqual(len(res_filtered), 0)
-
-        res_filtered_ch = get_current_votes(region="CH")
-        self.assertEqual(len(res_filtered_ch), 1)
-
-    @patch("abst.management.commands.run_mcp.get_abst_result_total")
-    @patch("abst.management.commands.run_mcp.get_national_timeline")
-    def test_get_vote_results(self, mock_timeline, mock_total):
-        import polars as pl
-        from abst.management.commands.run_mcp import get_vote_results
-        
-        mock_total.return_value = pl.DataFrame([
-            {"status": "final", "ja_stimmen": 100, "nein_stimmen": 50, "anzahl_stimmberechtigte": 200}
-        ])
-        mock_timeline.return_value = []
-        
-        res = get_vote_results(9999)
-        self.assertEqual(res["vorlage_id"], 9999)
-        self.assertEqual(res["counted"]["ja_stimmen"], 100)
-        self.assertEqual(res["counted"]["ja_prozent"], 66.67)
-
-    @patch("abst.management.commands.run_mcp.get_correlations")
-    def test_perform_correlation_analysis(self, mock_correlations):
-        from abst.management.commands.run_mcp import perform_correlation_analysis
-        mock_correlations.return_value = [{"id": "foo", "name": "Foo", "coefficient": 0.8}]
-        
-        res = perform_correlation_analysis(9999, "ja_prozent")
-        self.assertEqual(res[0]["id"], "foo")
-        self.assertEqual(res[0]["coefficient"], 0.8)
-
-    @patch("abst.management.commands.run_mcp.get_commune_stats")
-    def test_get_commune_statistics(self, mock_stats):
-        import polars as pl
-        from abst.management.commands.run_mcp import get_commune_statistics
-        
-        mock_stats.return_value = pl.DataFrame([
-            {"geo_id": 1, "pop_total_2024": 1234.0}
-        ])
-        
-        res = get_commune_statistics(9999, ["pop_total_2024"])
-        self.assertEqual(len(res), 1)
-        self.assertEqual(res[0]["geo_id"], 1)
-        self.assertEqual(res[0]["name"], "Test Commune")
-        self.assertEqual(res[0]["pop_total_2024"], 1234.0)
-
-    @patch("abst.management.commands.run_mcp.get_abst_results")
-    def test_get_commune_results_for_vote(self, mock_results):
-        import polars as pl
-        from abst.management.commands.run_mcp import get_commune_results_for_vote
-        
-        mock_results.return_value = pl.DataFrame([
-            {"geo_id": 1, "status": "final", "ja_stimmen": 60, "nein_stimmen": 40, "anzahl_stimmberechtigte": 120, "ja_prozent": 60.0, "stimmbeteiligung": 83.33}
-        ])
-        
-        res = get_commune_results_for_vote(9999)
-        self.assertEqual(len(res), 1)
-        self.assertEqual(res[0]["name"], "Test Commune")
-        self.assertEqual(res[0]["yes_pct"], 60.0)
-
-    @patch("abst.behavior.calculate_behavior")
-    def test_perform_waehlerwanderung(self, mock_calc):
-        from abst.management.commands.run_mcp import perform_waehlerwanderung
-        mock_calc.return_value = {"matrix": [[0.5]]}
-        
-        res = perform_waehlerwanderung(9999, source_type="election", wahlen_scope="lager")
-        self.assertEqual(res["matrix"], [[0.5]])
-
-    def test_api_key_middleware(self):
-        from starlette.testclient import TestClient
-        from starlette.applications import Starlette
-        from starlette.routing import Route
-        from starlette.responses import JSONResponse
-        from abst.management.commands.run_mcp import APIKeyMiddleware
-
-        async def dummy_endpoint(request):
-            return JSONResponse({"success": True})
-
-        app = Starlette(routes=[
-            Route("/test", dummy_endpoint, methods=["GET", "POST", "OPTIONS"]),
-            Route("/messages", dummy_endpoint, methods=["POST"]),
-        ])
-        app.add_middleware(APIKeyMiddleware, keys=["secret-key-1", "secret-key-2"])
-
-        client = TestClient(app)
-
-        # 1. Test missing API key
-        resp = client.get("/test")
-        self.assertEqual(resp.status_code, 401)
-        self.assertEqual(resp.json(), {"error": "Unauthorized: Invalid or missing API key."})
-
-        # 2. Test invalid API key
-        resp = client.get("/test", headers={"Authorization": "Bearer invalid-key"})
-        self.assertEqual(resp.status_code, 401)
-
-        # 3. Test valid Bearer token
-        resp = client.get("/test", headers={"Authorization": "Bearer secret-key-1"})
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {"success": True})
-
-        # 4. Test valid X-API-Key header
-        resp = client.get("/test", headers={"X-API-Key": "secret-key-2"})
-        self.assertEqual(resp.status_code, 200)
-
-        # 5. Test valid query parameter
-        resp = client.get("/test?api_key=secret-key-1")
-        self.assertEqual(resp.status_code, 200)
-
-        # 6. Test CORS OPTIONS request passes through without key
-        resp = client.options("/test")
-        self.assertEqual(resp.status_code, 200)
-
-        # 7. Test /messages endpoint does not require API key
-        resp = client.post("/messages")
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json(), {"success": True})
-
-    def test_combined_mcp_endpoints(self):
-        from starlette.testclient import TestClient
-        from abst.management.commands.run_mcp import mcp
-        from starlette.applications import Starlette
-
-        starlette_app_sse = mcp.sse_app()
-        starlette_app_http = mcp.streamable_http_app()
-        routes = list(starlette_app_sse.routes) + list(starlette_app_http.routes)
-        
-        import contextlib
-        @contextlib.asynccontextmanager
-        async def lifespan(app: Starlette):
-            if mcp._session_manager is not None:
-                # Reset has_started state so tests don't error on multiple runs
-                mcp._session_manager._has_started = False
-                async with mcp._session_manager.run():
-                    yield
-            else:
-                yield
-                
-        app = Starlette(routes=routes, lifespan=lifespan)
-        
-        from abst.management.commands.run_mcp import APIKeyMiddleware
-        app.add_middleware(APIKeyMiddleware, keys=["test-key"])
-        
-        client = TestClient(app)
-        
-        # Test /sse GET without key is 401
-        resp = client.get("/sse")
-        self.assertEqual(resp.status_code, 401)
-        
-        # Test /mcp POST without key is 401
-        resp = client.post("/mcp")
-        self.assertEqual(resp.status_code, 401)
-
-    def test_mcp_doc_requires_login(self):
-        from django.urls import reverse
-        url = reverse("abst:mcp_doc")
-        
-        # Unauthorized client (should redirect to login)
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 302)
-        self.assertIn("login", resp.url)
-
-        # Authorized client
-        from django.contrib.auth.models import User
-        User.objects.create_user(username="testuser", password="password")
-        self.client.login(username="testuser", password="password")
-        
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 200)
-
-    def test_waehlerwanderung_info_accessible(self):
-        from django.urls import reverse
-        url = reverse("abst:waehlerwanderung_info")
-        
-        resp = self.client.get(url)
-        self.assertEqual(resp.status_code, 200)
-
-
-
-
-
-
-

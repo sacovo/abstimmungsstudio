@@ -60,13 +60,6 @@
                         <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
                     </a>
                 </li>
-                {% if user.is_authenticated %}
-                <li>
-                    <a href="{% url 'abst:mcp_doc' %}" class="black-text">
-                        <i class="material-symbols-outlined left">settings_input_component</i>MCP Server
-                    </a>
-                </li>
-                {% endif %}
             </ul>
         </li>
     </ul>
@@ -113,13 +106,6 @@
                 <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
             </a>
         </li>
-        {% if user.is_authenticated %}
-        <li>
-            <a href="{% url 'abst:mcp_doc' %}">
-                <i class="material-symbols-outlined left">settings_input_component</i>MCP Server
-            </a>
-        </li>
-        {% endif %}
     </ul>
 </div>
 

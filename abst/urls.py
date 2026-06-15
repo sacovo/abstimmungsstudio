@@ -9,8 +9,8 @@ urlpatterns = [
     path("wahlen/map/", views.wahlen_map_view, name="wahlen_map"),
     path("evaluation/", views.evaluation_view, name="evaluation"),
     path("manual-entry/", views.manual_entry_view, name="manual_entry"),
-    path("mcp-doc/", views.mcp_doc_view, name="mcp_doc"),
-    path("waehlerwanderung-info/", views.waehlerwanderung_info_view, name="waehlerwanderung_info"),
+    path("waehlerwanderung-info/", views.waehlerwanderung_info_view,
+         name="waehlerwanderung_info"),
     path("<int:vorlage_id>/map/", views.vorlage_map_view, name="vorlage_map"),
     path("<int:vorlage_id>/table/", views.vorlage_table_view, name="vorlage_table"),
     path(

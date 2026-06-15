@@ -30,7 +30,6 @@ dependencies = [
     "gunicorn>=25.1.0",
     "rpy2>=3.5.15",
     "rich>=15.0.0",
-    "mcp>=1.27.2",
 ]
 
 [dependency-groups]

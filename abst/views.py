@@ -1,3 +1,4 @@
+from django.contrib.auth.decorators import login_required
 import urllib.parse
 import urllib.request
 import json
@@ -91,8 +92,6 @@ def proxy_geodata_view(request):
         return HttpResponseNotFound(f"Error fetching URL: {e}")
 
 
-from django.contrib.auth.decorators import login_required
-
 @login_required
 def vorlage_behavior_view(request, vorlage_id):
     vorlage = get_object_or_404(Vorlage, vorlagen_id=vorlage_id)
@@ -102,7 +101,6 @@ def vorlage_behavior_view(request, vorlage_id):
 def vorlage_correlations_view(request, vorlage_id):
     vorlage = get_object_or_404(Vorlage, vorlagen_id=vorlage_id)
     return render(request, "abst/vorlage_correlations.html", {"vorlage": vorlage})
-
 
 
 def evaluation_view(request):
@@ -152,11 +150,14 @@ def manual_entry_view(request):
     if not latest_tag:
         return render(request, "abst/manual_entry.html", {"error": "Keine Abstimmungstage vorhanden."})
 
-    vorlagen = Vorlage.objects.filter(tag=latest_tag, region="CH").order_by("name")
+    vorlagen = Vorlage.objects.filter(
+        tag=latest_tag, region="CH").order_by("name")
 
     # Fetch Gemeinden and Zaehlkreise for the latest tag's geostand
-    gemeinden = list(Gemeinde.objects.filter(stand=latest_tag.stand).values("name", "kanton", "geo_id").order_by("name"))
-    zaehlkreise = list(Zaehlkreis.objects.filter(gemeinde__stand=latest_tag.stand).values("name", "gemeinde__kanton", "geo_id").order_by("name"))
+    gemeinden = list(Gemeinde.objects.filter(stand=latest_tag.stand).values(
+        "name", "kanton", "geo_id").order_by("name"))
+    zaehlkreise = list(Zaehlkreis.objects.filter(gemeinde__stand=latest_tag.stand).values(
+        "name", "gemeinde__kanton", "geo_id").order_by("name"))
 
     locations = []
     for g in gemeinden:
@@ -182,12 +183,5 @@ def manual_entry_view(request):
     return render(request, "abst/manual_entry.html", context)
 
 
-@login_required
-def mcp_doc_view(request):
-    return render(request, "abst/mcp_doc.html", {})
-
-
 def waehlerwanderung_info_view(request):
     return render(request, "abst/waehlerwanderung_info.html", {})
-
-
