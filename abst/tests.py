@@ -611,6 +611,29 @@ class MCPToolsTests(TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(resp.json(), {"success": True})
 
+    def test_combined_mcp_endpoints(self):
+        from starlette.testclient import TestClient
+        from abst.management.commands.run_mcp import mcp
+        from starlette.applications import Starlette
+
+        starlette_app_sse = mcp.sse_app()
+        starlette_app_http = mcp.streamable_http_app()
+        routes = list(starlette_app_sse.routes) + list(starlette_app_http.routes)
+        app = Starlette(routes=routes)
+        
+        from abst.management.commands.run_mcp import APIKeyMiddleware
+        app.add_middleware(APIKeyMiddleware, keys=["test-key"])
+        
+        client = TestClient(app)
+        
+        # Test /sse GET without key is 401
+        resp = client.get("/sse")
+        self.assertEqual(resp.status_code, 401)
+        
+        # Test /mcp POST without key is 401
+        resp = client.post("/mcp")
+        self.assertEqual(resp.status_code, 401)
+
     def test_mcp_doc_requires_login(self):
         from django.urls import reverse
         url = reverse("abst:mcp_doc")
