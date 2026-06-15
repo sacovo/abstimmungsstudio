@@ -1,8 +1,13 @@
+import os
 import sys
 from typing import Literal
 import polars as pl
 from django.core.management.base import BaseCommand
 from mcp.server.fastmcp import FastMCP
+
+# Enable Django ORM operations in async context
+os.environ["DJANGO_ALLOW_ASYNC_UNSAFE"] = "true"
+
 
 from abst.models import Abstimmungstag, Vorlage, Gemeinde, Zaehlkreis
 from abst.store import (
