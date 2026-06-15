@@ -572,7 +572,10 @@ class MCPToolsTests(TestCase):
         async def dummy_endpoint(request):
             return JSONResponse({"success": True})
 
-        app = Starlette(routes=[Route("/test", dummy_endpoint, methods=["GET", "POST", "OPTIONS"])])
+        app = Starlette(routes=[
+            Route("/test", dummy_endpoint, methods=["GET", "POST", "OPTIONS"]),
+            Route("/messages", dummy_endpoint, methods=["POST"]),
+        ])
         app.add_middleware(APIKeyMiddleware, keys=["secret-key-1", "secret-key-2"])
 
         client = TestClient(app)
@@ -602,6 +605,11 @@ class MCPToolsTests(TestCase):
         # 6. Test CORS OPTIONS request passes through without key
         resp = client.options("/test")
         self.assertEqual(resp.status_code, 200)
+
+        # 7. Test /messages endpoint does not require API key
+        resp = client.post("/messages")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"success": True})
 
     def test_mcp_doc_requires_login(self):
         from django.urls import reverse

@@ -33,6 +33,11 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
             
+        # Allow messaging endpoint because it is protected by the session_id
+        # generated during the authenticated /sse handshake.
+        if request.url.path in ("/messages", "/messages/"):
+            return await call_next(request)
+            
         # Extract API key
         api_key = None
         auth_header = request.headers.get("Authorization")
