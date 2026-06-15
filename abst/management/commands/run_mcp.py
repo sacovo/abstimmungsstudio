@@ -405,6 +405,7 @@ class Command(BaseCommand):
         elif transport == "sse":
             import uvicorn
             import anyio
+            import contextlib
             from starlette.applications import Starlette
             
             starlette_app_sse = mcp.sse_app()
@@ -412,7 +413,16 @@ class Command(BaseCommand):
             
             # Combine routes from both SSE and Streamable HTTP transports
             routes = list(starlette_app_sse.routes) + list(starlette_app_http.routes)
-            starlette_app = Starlette(routes=routes)
+            
+            @contextlib.asynccontextmanager
+            async def lifespan(app: Starlette):
+                if mcp._session_manager is not None:
+                    async with mcp._session_manager.run():
+                        yield
+                else:
+                    yield
+            
+            starlette_app = Starlette(routes=routes, lifespan=lifespan)
             
             # Check for API keys in environment
             allowed_keys_str = os.environ.get("MCP_API_KEYS") or os.environ.get("API_KEY") or ""

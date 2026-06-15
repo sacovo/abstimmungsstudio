@@ -619,7 +619,19 @@ class MCPToolsTests(TestCase):
         starlette_app_sse = mcp.sse_app()
         starlette_app_http = mcp.streamable_http_app()
         routes = list(starlette_app_sse.routes) + list(starlette_app_http.routes)
-        app = Starlette(routes=routes)
+        
+        import contextlib
+        @contextlib.asynccontextmanager
+        async def lifespan(app: Starlette):
+            if mcp._session_manager is not None:
+                # Reset has_started state so tests don't error on multiple runs
+                mcp._session_manager._has_started = False
+                async with mcp._session_manager.run():
+                    yield
+            else:
+                yield
+                
+        app = Starlette(routes=routes, lifespan=lifespan)
         
         from abst.management.commands.run_mcp import APIKeyMiddleware
         app.add_middleware(APIKeyMiddleware, keys=["test-key"])
