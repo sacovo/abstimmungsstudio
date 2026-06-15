@@ -20,40 +20,69 @@ mcp = FastMCP(
     log_level="INFO"
 )
 
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import JSONResponse
+from urllib.parse import parse_qs
 
-class APIKeyMiddleware(BaseHTTPMiddleware):
+class APIKeyMiddleware:
     def __init__(self, app, keys):
-        super().__init__(app)
+        self.app = app
         self.keys = keys
         
-    async def dispatch(self, request, call_next):
+    async def __call__(self, scope, receive, send):
+        # We only inspect HTTP requests
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+            
         # Allow CORS preflight (OPTIONS) requests without key
-        if request.method == "OPTIONS":
-            return await call_next(request)
+        if scope.get("method") == "OPTIONS":
+            await self.app(scope, receive, send)
+            return
             
         # Allow messaging endpoint because it is protected by the session_id
         # generated during the authenticated /sse handshake.
-        if request.url.path in ("/messages", "/messages/"):
-            return await call_next(request)
+        if scope.get("path") in ("/messages", "/messages/"):
+            await self.app(scope, receive, send)
+            return
             
         # Extract API key
         api_key = None
-        auth_header = request.headers.get("Authorization")
-        if auth_header and auth_header.startswith("Bearer "):
+        headers = dict(scope.get("headers", []))
+        
+        # 1. Bearer token in Authorization header
+        auth_header = headers.get(b"authorization", b"").decode("utf-8")
+        if auth_header.startswith("Bearer "):
             api_key = auth_header[7:].strip()
-        if not api_key:
-            api_key = request.headers.get("X-API-Key")
-        if not api_key:
-            api_key = request.query_params.get("api_key")
             
+        # 2. X-API-Key header
+        if not api_key:
+            api_key = headers.get(b"x-api-key", b"").decode("utf-8").strip()
+            
+        # 3. Query string parameter
+        if not api_key:
+            query_string = scope.get("query_string", b"").decode("utf-8")
+            params = parse_qs(query_string)
+            api_keys = params.get("api_key", [])
+            if api_keys:
+                api_key = api_keys[0]
+                
         if not api_key or api_key not in self.keys:
-            return JSONResponse(
-                {"error": "Unauthorized: Invalid or missing API key."},
-                status_code=401
-            )
-        return await call_next(request)
+            response_body = b'{"error": "Unauthorized: Invalid or missing API key."}'
+            await send({
+                "type": "http.response.start",
+                "status": 401,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"content-length", str(len(response_body)).encode("utf-8")),
+                ],
+            })
+            await send({
+                "type": "http.response.body",
+                "body": response_body,
+            })
+            return
+            
+        await self.app(scope, receive, send)
+
 
 
 # 1. Getting current votes (latest voting day) for CH and all regions
