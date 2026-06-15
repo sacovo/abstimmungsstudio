@@ -462,5 +462,174 @@ class KantonalImportTests(TestCase):
         self.assertEqual(zk_res.result.stimmbeteiligung, 50.0)
 
 
+class MCPToolsTests(TestCase):
+    def setUp(self):
+        import datetime
+        from abst.models import GeoStand, Abstimmungstag, Vorlage, Gemeinde
+        self.gs = GeoStand.objects.create(url="http://test.com", date=datetime.date(2026, 6, 14))
+        self.tag = Abstimmungstag.objects.create(
+            date=datetime.date(2026, 6, 14),
+            name="Test Voting Day",
+            stand=self.gs
+        )
+        self.vorlage = Vorlage.objects.create(
+            name="Test Vote",
+            vorlagen_id=9999,
+            tag=self.tag,
+            region="CH",
+            finished=True
+        )
+        self.gemeinde = Gemeinde.objects.create(
+            name="Test Commune",
+            geo_id=1,
+            kanton="ZH",
+            kanton_id=1,
+            stand=self.gs
+        )
+
+    def test_get_current_votes(self):
+        from abst.management.commands.run_mcp import get_current_votes
+        res = get_current_votes()
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["vorlagen_id"], 9999)
+        self.assertEqual(res[0]["name"], "Test Vote")
+
+        res_filtered = get_current_votes(region="ZH")
+        self.assertEqual(len(res_filtered), 0)
+
+        res_filtered_ch = get_current_votes(region="CH")
+        self.assertEqual(len(res_filtered_ch), 1)
+
+    @patch("abst.management.commands.run_mcp.get_abst_result_total")
+    @patch("abst.management.commands.run_mcp.get_national_timeline")
+    def test_get_vote_results(self, mock_timeline, mock_total):
+        import polars as pl
+        from abst.management.commands.run_mcp import get_vote_results
+        
+        mock_total.return_value = pl.DataFrame([
+            {"status": "final", "ja_stimmen": 100, "nein_stimmen": 50, "anzahl_stimmberechtigte": 200}
+        ])
+        mock_timeline.return_value = []
+        
+        res = get_vote_results(9999)
+        self.assertEqual(res["vorlage_id"], 9999)
+        self.assertEqual(res["counted"]["ja_stimmen"], 100)
+        self.assertEqual(res["counted"]["ja_prozent"], 66.67)
+
+    @patch("abst.management.commands.run_mcp.get_correlations")
+    def test_perform_correlation_analysis(self, mock_correlations):
+        from abst.management.commands.run_mcp import perform_correlation_analysis
+        mock_correlations.return_value = [{"id": "foo", "name": "Foo", "coefficient": 0.8}]
+        
+        res = perform_correlation_analysis(9999, "ja_prozent")
+        self.assertEqual(res[0]["id"], "foo")
+        self.assertEqual(res[0]["coefficient"], 0.8)
+
+    @patch("abst.management.commands.run_mcp.get_commune_stats")
+    def test_get_commune_statistics(self, mock_stats):
+        import polars as pl
+        from abst.management.commands.run_mcp import get_commune_statistics
+        
+        mock_stats.return_value = pl.DataFrame([
+            {"geo_id": 1, "pop_total_2024": 1234.0}
+        ])
+        
+        res = get_commune_statistics(9999, ["pop_total_2024"])
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["geo_id"], 1)
+        self.assertEqual(res[0]["name"], "Test Commune")
+        self.assertEqual(res[0]["pop_total_2024"], 1234.0)
+
+    @patch("abst.management.commands.run_mcp.get_abst_results")
+    def test_get_commune_results_for_vote(self, mock_results):
+        import polars as pl
+        from abst.management.commands.run_mcp import get_commune_results_for_vote
+        
+        mock_results.return_value = pl.DataFrame([
+            {"geo_id": 1, "status": "final", "ja_stimmen": 60, "nein_stimmen": 40, "anzahl_stimmberechtigte": 120, "ja_prozent": 60.0, "stimmbeteiligung": 83.33}
+        ])
+        
+        res = get_commune_results_for_vote(9999)
+        self.assertEqual(len(res), 1)
+        self.assertEqual(res[0]["name"], "Test Commune")
+        self.assertEqual(res[0]["yes_pct"], 60.0)
+
+    @patch("abst.behavior.calculate_behavior")
+    def test_perform_waehlerwanderung(self, mock_calc):
+        from abst.management.commands.run_mcp import perform_waehlerwanderung
+        mock_calc.return_value = {"matrix": [[0.5]]}
+        
+        res = perform_waehlerwanderung(9999, source_type="election", wahlen_scope="lager")
+        self.assertEqual(res["matrix"], [[0.5]])
+
+    def test_api_key_middleware(self):
+        from starlette.testclient import TestClient
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+        from starlette.responses import JSONResponse
+        from abst.management.commands.run_mcp import APIKeyMiddleware
+
+        async def dummy_endpoint(request):
+            return JSONResponse({"success": True})
+
+        app = Starlette(routes=[Route("/test", dummy_endpoint, methods=["GET", "POST", "OPTIONS"])])
+        app.add_middleware(APIKeyMiddleware, keys=["secret-key-1", "secret-key-2"])
+
+        client = TestClient(app)
+
+        # 1. Test missing API key
+        resp = client.get("/test")
+        self.assertEqual(resp.status_code, 401)
+        self.assertEqual(resp.json(), {"error": "Unauthorized: Invalid or missing API key."})
+
+        # 2. Test invalid API key
+        resp = client.get("/test", headers={"Authorization": "Bearer invalid-key"})
+        self.assertEqual(resp.status_code, 401)
+
+        # 3. Test valid Bearer token
+        resp = client.get("/test", headers={"Authorization": "Bearer secret-key-1"})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.json(), {"success": True})
+
+        # 4. Test valid X-API-Key header
+        resp = client.get("/test", headers={"X-API-Key": "secret-key-2"})
+        self.assertEqual(resp.status_code, 200)
+
+        # 5. Test valid query parameter
+        resp = client.get("/test?api_key=secret-key-1")
+        self.assertEqual(resp.status_code, 200)
+
+        # 6. Test CORS OPTIONS request passes through without key
+        resp = client.options("/test")
+        self.assertEqual(resp.status_code, 200)
+
+    def test_mcp_doc_requires_login(self):
+        from django.urls import reverse
+        url = reverse("abst:mcp_doc")
+        
+        # Unauthorized client (should redirect to login)
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 302)
+        self.assertIn("login", resp.url)
+
+        # Authorized client
+        from django.contrib.auth.models import User
+        User.objects.create_user(username="testuser", password="password")
+        self.client.login(username="testuser", password="password")
+        
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+    def test_waehlerwanderung_info_accessible(self):
+        from django.urls import reverse
+        url = reverse("abst:waehlerwanderung_info")
+        
+        resp = self.client.get(url)
+        self.assertEqual(resp.status_code, 200)
+
+
+
+
+
 
 

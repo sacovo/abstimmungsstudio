@@ -181,3 +181,13 @@ def manual_entry_view(request):
     }
     return render(request, "abst/manual_entry.html", context)
 
+
+@login_required
+def mcp_doc_view(request):
+    return render(request, "abst/mcp_doc.html", {})
+
+
+def waehlerwanderung_info_view(request):
+    return render(request, "abst/waehlerwanderung_info.html", {})
+
+

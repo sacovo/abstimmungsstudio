@@ -327,8 +327,59 @@ Für jede Abstimmung wird eine neue Zerlegung mit den alten Resultaten erstellt,
 
 Am Abstimmungssonntag wird von 12:00 jede Minute der aktuellste Stand der Resultate geholt und für die fehlenden Gemeinden wird mit einem Generalized Linear Model berechnet. Unter `docs/immer2020submatrix.pdf` wird die Methode genauer beschrieben.
 
-## Architektur
-
 - Ein Django Backend für die API und die Weboberläche mit HTML und Javascript
 - Postgresql für Relationale Daten
 - InfluxDB für die Resultate der Gemeinden
+
+## MCP Server
+
+Die Applikation verfügt über einen integrierten **Model Context Protocol (MCP)** Server, mit dem LLMs und KI-Assistenten (wie Claude, Cursor etc.) direkt auf die Abstimmungsdaten und Analyse-Tools zugreifen können.
+
+### Verfügbare Tools:
+- `get_current_votes`: Holt alle Abstimmungsvorlagen des neuesten Abstimmungstags (optional gefiltert nach Kanton oder 'CH').
+- `get_vote_results`: Liefert die ausgezählten (counted) und hochgerechneten (projected) Resultate für eine Vorlage.
+- `perform_correlation_analysis`: Berechnet Pearson-Korrelationen zwischen Ja-Stimmen/Beteiligung und Gemeinde-Statistiken.
+- `get_commune_statistics`: Holt demografische und sozioökonomische Kennzahlen einzelner oder aller Gemeinden für eine Vorlage.
+- `get_commune_results_for_vote`: Holt die Resultate (Beteiligung, Ja-Stimmen-Prozent, Anzahl Stimmberechtigte) einzelner oder aller Gemeinden für eine Vorlage.
+- `perform_waehlerwanderung`: Führt eine Wählerwanderungs-Analyse (Transition-Matrix) von einer früheren Abstimmung oder Wahl zur Ziel-Vorlage durch.
+- `get_voter_transition_options`: Holt die Liste der verfügbaren Quelle-Abstimmungen und -Wahlen für eine Ziel-Vorlage.
+
+### Starten des Servers:
+Der MCP-Server wird als Django-Management-Command gestartet:
+
+```bash
+# Stdio-Transport (Standard, z.B. für lokale Integration in Claude Desktop)
+python manage.py run_mcp --transport stdio
+
+# SSE-Transport (HTTP Server)
+python manage.py run_mcp --transport sse --host 127.0.0.1 --port 8000
+```
+
+### API-Key Authentifizierung (für SSE)
+
+Um den Zugriff über den HTTP (SSE) Transport abzusichern, können eine oder mehrere erlaubte API-Keys über die Umgebungsvariable `MCP_API_KEYS` (oder alternativ `API_KEY`, kommagetrennt für mehrere Keys) definiert werden:
+
+```bash
+export MCP_API_KEYS="secret-key-1,secret-key-2"
+python manage.py run_mcp --transport sse --port 8000
+```
+
+Bei aktivierter Authentifizierung müssen Clients den API-Key bei jedem Request bereitstellen. Dies wird auf drei Arten unterstützt:
+1. Im HTTP-Header `Authorization`: `Authorization: Bearer <api_key>`
+2. Im HTTP-Header `X-API-Key`: `X-API-Key: <api_key>`
+3. Als URL Query-Parameter: `?api_key=<api_key>`
+
+### Konfiguration in Claude Desktop:
+Füge Folgendes in der `claude_desktop_config.json` hinzu:
+
+```json
+{
+  "mcpServers": {
+    "abstimmungsstudio": {
+      "command": "uv",
+      "args": ["run", "python", "manage.py", "run_mcp", "--transport", "stdio"],
+      "cwd": "/path/to/do-abstimmungsstudio"
+    }
+  }
+}
+```

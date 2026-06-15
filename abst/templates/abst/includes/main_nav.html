@@ -12,18 +12,8 @@
     
     <ul class="right hide-on-med-and-down">
         <li>
-            <a href="{% url 'abst:vorlagen' %}">
-                <i class="material-symbols-outlined left">list</i>Alle Vorlagen
-            </a>
-        </li>
-        <li>
             <a href="{% url 'abst:wahlen_map' %}">
                 <i class="material-symbols-outlined left">public</i>Wahlen
-            </a>
-        </li>
-        <li>
-            <a href="{% url 'abst:evaluation' %}">
-                <i class="material-symbols-outlined left">query_stats</i>Evaluation
             </a>
         </li>
         {% if user.is_authenticated %}
@@ -50,23 +40,42 @@
                 </li>
             </ul>
         </li>
+        <li>
+            <a class="dropdown-trigger" href="#!" data-target="more-dropdown" x-ref="moreDropdownTrigger">
+                <i class="material-symbols-outlined left">more_horiz</i>Mehr
+            </a>
+            <ul id="more-dropdown" class="dropdown-content">
+                <li>
+                    <a href="{% url 'abst:vorlagen' %}" class="black-text">
+                        <i class="material-symbols-outlined left">list</i>Alle Vorlagen
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'abst:evaluation' %}" class="black-text">
+                        <i class="material-symbols-outlined left">query_stats</i>Evaluation
+                    </a>
+                </li>
+                <li>
+                    <a href="{% url 'abst:waehlerwanderung_info' %}" class="black-text">
+                        <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
+                    </a>
+                </li>
+                {% if user.is_authenticated %}
+                <li>
+                    <a href="{% url 'abst:mcp_doc' %}" class="black-text">
+                        <i class="material-symbols-outlined left">settings_input_component</i>MCP Server
+                    </a>
+                </li>
+                {% endif %}
+            </ul>
+        </li>
     </ul>
 
     <ul id="main-nav-sidenav" class="sidenav" x-ref="sidenav">
         {% include 'abst/includes/nav_header.html' %}
         <li>
-            <a href="{% url 'abst:vorlagen' %}">
-                <i class="material-symbols-outlined left">list</i>Alle Vorlagen
-            </a>
-        </li>
-        <li>
             <a href="{% url 'abst:wahlen_map' %}">
                 <i class="material-symbols-outlined left">public</i>Wahlen
-            </a>
-        </li>
-        <li>
-            <a href="{% url 'abst:evaluation' %}">
-                <i class="material-symbols-outlined left">query_stats</i>Evaluation
             </a>
         </li>
         {% if user.is_authenticated %}
@@ -87,6 +96,30 @@
                 </select>
             </div>
         </li>
+        <li class="divider"></li>
+        <li><a class="subheader">Mehr</a></li>
+        <li>
+            <a href="{% url 'abst:vorlagen' %}">
+                <i class="material-symbols-outlined left">list</i>Alle Vorlagen
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:evaluation' %}">
+                <i class="material-symbols-outlined left">query_stats</i>Evaluation
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:waehlerwanderung_info' %}">
+                <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
+            </a>
+        </li>
+        {% if user.is_authenticated %}
+        <li>
+            <a href="{% url 'abst:mcp_doc' %}">
+                <i class="material-symbols-outlined left">settings_input_component</i>MCP Server
+            </a>
+        </li>
+        {% endif %}
     </ul>
 </div>
 
@@ -101,6 +134,12 @@ document.addEventListener('alpine:init', () => {
             setTimeout(() => {
                 if (this.$refs.tageDropdownTrigger) {
                     M.Dropdown.init(this.$refs.tageDropdownTrigger, {
+                        coverTrigger: false,
+                        constrainWidth: false
+                    });
+                }
+                if (this.$refs.moreDropdownTrigger) {
+                    M.Dropdown.init(this.$refs.moreDropdownTrigger, {
                         coverTrigger: false,
                         constrainWidth: false
                     });
