@@ -420,6 +420,8 @@ class Command(BaseCommand):
         # Override FastMCP settings from command line options
         mcp.settings.host = host
         mcp.settings.port = port
+        mcp.settings.stateless_http = True
+        mcp.settings.json_response = True
 
         # If binding to a non-local host, disable DNS rebinding protection so reverse proxies can route requests
         if host not in ("127.0.0.1", "localhost", "::1"):
