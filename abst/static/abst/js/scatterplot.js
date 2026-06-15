@@ -17,6 +17,8 @@ document.addEventListener('alpine:init', () => {
         yMetric: 'stimmbeteiligung',
         sizeMetric: 'anzahl_stimmberechtigte',
         colorMetric: 'canton',
+        chartType: 'scatter',
+        histogramMode: 'stacked',
         wahlenScope: 'partei',
         wahlenOptionId: '',
         wahlenMode: 'current',
@@ -28,6 +30,7 @@ document.addEventListener('alpine:init', () => {
         xLog: false,
         yLog: false,
         solidColor: '#7e8ba3',
+        showRegression: false,
 
         async init() {
             this.loading = true;
@@ -80,6 +83,39 @@ document.addEventListener('alpine:init', () => {
                 this.parteigruppen = options.parteigruppen || [];
                 this.lager = options.lager || [];
 
+                // Parse query parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.has('x_metric')) {
+                    this.xMetric = urlParams.get('x_metric');
+                }
+                if (urlParams.has('y_metric')) {
+                    this.yMetric = urlParams.get('y_metric');
+                }
+                if (urlParams.has('size_metric')) {
+                    this.sizeMetric = urlParams.get('size_metric');
+                }
+                if (urlParams.has('color_metric')) {
+                    this.colorMetric = urlParams.get('color_metric');
+                }
+                if (urlParams.has('chart_type')) {
+                    this.chartType = urlParams.get('chart_type');
+                }
+                if (urlParams.has('wahlen_scope')) {
+                    this.wahlenScope = urlParams.get('wahlen_scope');
+                }
+                if (urlParams.has('wahlen_option_id')) {
+                    this.wahlenOptionId = urlParams.get('wahlen_option_id');
+                }
+                if (urlParams.has('wahlen_mode')) {
+                    this.wahlenMode = urlParams.get('wahlen_mode');
+                }
+                if (urlParams.has('abstimmung_vorlage_id')) {
+                    this.abstimmungVorlageId = urlParams.get('abstimmung_vorlage_id');
+                }
+                if (urlParams.has('abstimmung_result_mode')) {
+                    this.abstimmungResultMode = urlParams.get('abstimmung_result_mode');
+                }
+
                 this.ensureDefaultWahlenOption();
                 await this.loadVorlagenOptions();
                 this.refreshSelects();
@@ -118,11 +154,26 @@ document.addEventListener('alpine:init', () => {
         },
 
         usesWahlenSection() {
+            if (this.chartType === 'histogram') {
+                return this.xMetric === 'wahlen_result';
+            }
             return [this.xMetric, this.yMetric, this.sizeMetric].includes('wahlen_result');
         },
 
         usesAbstimmungenSection() {
+            if (this.chartType === 'histogram') {
+                return this.xMetric === 'abstimmung_result';
+            }
             return [this.xMetric, this.yMetric, this.sizeMetric].includes('abstimmung_result');
+        },
+
+        onChartTypeChange() {
+            this.refreshSelects();
+            this.renderPlot();
+        },
+
+        onHistogramModeChange() {
+            this.renderPlot();
         },
 
         onMetricChange() {
@@ -337,68 +388,151 @@ document.addEventListener('alpine:init', () => {
             const sizes = this.scaledSizes(sizeRaw);
 
             let traces = [];
-
-            if (this.colorMetric === 'canton') {
-                // Mode 1: Canton-based colors (one trace per canton)
-                traces = this.renderCantonTraces(sizes);
-            } else if (this.colorMetric === 'solid') {
-                // Mode 2: Solid color (all points in one trace)
-                traces = [this.renderSolidTrace(sizes)];
-            } else {
-                // Mode 3: Metric-based color scale (all points in one trace with color scale)
-                traces = [this.renderMetricTraces(sizes)];
-            }
+            let layout = {};
 
             const h4Element = document.querySelector('article h4');
             const voteName = h4Element ? h4Element.innerText.replace(" - Scatterplot Analyse", "").trim() : "";
-            const mainTitle = `${this.getDetailedMetricLabel(this.xMetric)} vs ${this.getDetailedMetricLabel(this.yMetric)}`;
-            const plotTitle = voteName 
-                ? `${mainTitle}<br><span style="font-size: 22px; font-weight: normal; color: #90caf9;">${voteName}</span>` 
-                : mainTitle;
 
-            const legendTitle = this.colorMetric === 'canton' ? 'Kanton' : this.colorMetricLabel();
-            const layout = {
-                title: {
-                    text: plotTitle,
-                    x: 0.01,
-                    y: 0.98,
-                    yanchor: 'top',
-                    font: { color: '#ffffff', size: 26 }
-                },
-                margin: { l: 90, r: 100, t: 130, b: 100 },
-                paper_bgcolor: '#040f2d',
-                plot_bgcolor: '#eef2f7',
-                xaxis: {
+            if (this.chartType === 'histogram') {
+                traces = this.renderHistogramTraces();
+                const mainTitle = `Histogramm: ${this.getDetailedMetricLabel(this.xMetric)}`;
+                const plotTitle = voteName 
+                    ? `${mainTitle}<br><span style="font-size: 22px; font-weight: normal; color: #90caf9;">${voteName}</span>` 
+                    : mainTitle;
+
+                layout = {
                     title: {
-                        text: this.getDetailedMetricLabel(this.xMetric),
-                        font: { color: '#ffffff', size: 18 },
-                        standoff: 20
+                        text: plotTitle,
+                        x: 0.01,
+                        y: 0.98,
+                        yanchor: 'top',
+                        font: { color: '#ffffff', size: 26 }
                     },
-                    tickfont: { color: '#a0aec0', size: 14 },
-                    zeroline: false,
-                    gridcolor: '#d8dee8',
-                    type: this.xLog ? 'log' : 'linear',
-                },
-                yaxis: {
+                    margin: { l: 90, r: 100, t: 130, b: 100 },
+                    paper_bgcolor: '#040f2d',
+                    plot_bgcolor: '#eef2f7',
+                    xaxis: {
+                        title: {
+                            text: this.getDetailedMetricLabel(this.xMetric),
+                            font: { color: '#ffffff', size: 18 },
+                            standoff: 20
+                        },
+                        tickfont: { color: '#a0aec0', size: 14 },
+                        zeroline: false,
+                        gridcolor: '#d8dee8',
+                        type: this.xLog ? 'log' : 'linear',
+                    },
+                    yaxis: {
+                        title: {
+                            text: 'Anzahl Gemeinden',
+                            font: { color: '#ffffff', size: 18 },
+                            standoff: 20
+                        },
+                        tickfont: { color: '#a0aec0', size: 14 },
+                        zeroline: false,
+                        gridcolor: '#d8dee8',
+                        type: 'linear',
+                    },
+                    legend: {
+                        title: {
+                            text: this.histogramMode === 'solid' ? 'Legende' : 'Kanton',
+                            font: { color: '#ffffff', size: 18 }
+                        },
+                        font: { color: '#ffffff', size: 16 }
+                    },
+                    barmode: this.histogramMode === 'stacked' ? 'stack' : (this.histogramMode === 'grouped' ? 'group' : 'overlay'),
+                    hovermode: 'closest',
+                };
+            } else {
+                if (this.colorMetric === 'canton') {
+                    // Mode 1: Canton-based colors (one trace per canton)
+                    traces = this.renderCantonTraces(sizes);
+                } else if (this.colorMetric === 'solid') {
+                    // Mode 2: Solid color (all points in one trace)
+                    traces = [this.renderSolidTrace(sizes)];
+                } else {
+                    // Mode 3: Metric-based color scale (all points in one trace with color scale)
+                    traces = [this.renderMetricTraces(sizes)];
+                }
+
+                if (this.showRegression) {
+                    const xs = [];
+                    const ys = [];
+                    this.points.forEach((p) => {
+                        if (p.x_value !== null && p.x_value !== undefined && p.y_value !== null && p.y_value !== undefined) {
+                            xs.push(p.x_value);
+                            ys.push(p.y_value);
+                        }
+                    });
+
+                    const regression = this.calculateRegressionLine(xs, ys);
+                    if (regression) {
+                        traces.push({
+                            type: 'scatter',
+                            mode: 'lines',
+                            name: `Trendlinie (R² = ${regression.r2.toFixed(3)})`,
+                            x: regression.x,
+                            y: regression.y,
+                            line: {
+                                color: '#ff4a5a',
+                                width: 3.5,
+                                dash: 'dashdot'
+                            },
+                            hoverinfo: 'none',
+                            showlegend: true
+                        });
+                    }
+                }
+
+                const mainTitle = `${this.getDetailedMetricLabel(this.xMetric)} vs ${this.getDetailedMetricLabel(this.yMetric)}`;
+                const plotTitle = voteName 
+                    ? `${mainTitle}<br><span style="font-size: 22px; font-weight: normal; color: #90caf9;">${voteName}</span>` 
+                    : mainTitle;
+
+                const legendTitle = this.colorMetric === 'canton' ? 'Kanton' : this.colorMetricLabel();
+                layout = {
                     title: {
-                        text: this.getDetailedMetricLabel(this.yMetric),
-                        font: { color: '#ffffff', size: 18 },
-                        standoff: 20
+                        text: plotTitle,
+                        x: 0.01,
+                        y: 0.98,
+                        yanchor: 'top',
+                        font: { color: '#ffffff', size: 26 }
                     },
-                    tickfont: { color: '#a0aec0', size: 14 },
-                    zeroline: false,
-                    gridcolor: '#d8dee8',
-                    type: this.yLog ? 'log' : 'linear',
-                },
-                legend: {
-                    title: {
-                        text: legendTitle,
-                        font: { color: '#ffffff', size: 18 }
+                    margin: { l: 90, r: 100, t: 130, b: 100 },
+                    paper_bgcolor: '#040f2d',
+                    plot_bgcolor: '#eef2f7',
+                    xaxis: {
+                        title: {
+                            text: this.getDetailedMetricLabel(this.xMetric),
+                            font: { color: '#ffffff', size: 18 },
+                            standoff: 20
+                        },
+                        tickfont: { color: '#a0aec0', size: 14 },
+                        zeroline: false,
+                        gridcolor: '#d8dee8',
+                        type: this.xLog ? 'log' : 'linear',
                     },
-                    font: { color: '#ffffff', size: 16 }
-                },
-                hovermode: 'closest',
-            };
+                    yaxis: {
+                        title: {
+                            text: this.getDetailedMetricLabel(this.yMetric),
+                            font: { color: '#ffffff', size: 18 },
+                            standoff: 20
+                        },
+                        tickfont: { color: '#a0aec0', size: 14 },
+                        zeroline: false,
+                        gridcolor: '#d8dee8',
+                        type: this.yLog ? 'log' : 'linear',
+                    },
+                    legend: {
+                        title: {
+                            text: legendTitle,
+                            font: { color: '#ffffff', size: 18 }
+                        },
+                        font: { color: '#ffffff', size: 16 }
+                    },
+                    hovermode: 'closest',
+                };
+            }
 
             if (this.logoBase64) {
                 layout.images = [{
@@ -422,6 +556,51 @@ document.addEventListener('alpine:init', () => {
             };
 
             Plotly.newPlot('scatterplot', traces, layout, config);
+        },
+
+        renderHistogramTraces() {
+            if (this.histogramMode === 'solid') {
+                const xs = this.points.map((p) => p.x_value).filter((val) => val !== null && val !== undefined);
+                return [{
+                    type: 'histogram',
+                    name: 'Gemeinden',
+                    x: xs,
+                    marker: {
+                        color: this.solidColor || '#7e8ba3',
+                        line: { width: 0.5, color: '#213547' }
+                    },
+                    opacity: 0.75,
+                }];
+            } else {
+                const cantonGroups = new Map();
+                this.points.forEach((point) => {
+                    const key = String(point.kanton_id);
+                    if (point.x_value === null || point.x_value === undefined) return;
+                    if (!cantonGroups.has(key)) {
+                        cantonGroups.set(key, {
+                            kantonId: point.kanton_id,
+                            kantonName: point.kanton,
+                            values: [],
+                        });
+                    }
+                    cantonGroups.get(key).values.push(point.x_value);
+                });
+
+                const sortedGroups = Array.from(cantonGroups.values()).sort((a, b) => a.kantonId - b.kantonId);
+                return sortedGroups.map((group) => {
+                    const color = this.cantonColor(group.kantonId);
+                    return {
+                        type: 'histogram',
+                        name: `${group.kantonName} (${group.kantonId})`,
+                        x: group.values,
+                        marker: {
+                            color: color,
+                            line: { width: 0.5, color: '#213547' }
+                        },
+                        opacity: 0.75,
+                    };
+                });
+            }
         },
 
         renderCantonTraces(sizes) {
@@ -540,6 +719,71 @@ document.addEventListener('alpine:init', () => {
                     opacity: 0.78,
                     line: { width: 0.5, color: '#213547' },
                 },
+            };
+        },
+
+        calculateRegressionLine(xs, ys) {
+            const n = xs.length;
+            if (n < 2) return null;
+
+            const regXs = this.xLog ? xs.map(x => Math.log10(x)) : xs;
+            const regYs = this.yLog ? ys.map(y => Math.log10(y)) : ys;
+
+            const validIndices = [];
+            for (let i = 0; i < n; i++) {
+                if (isFinite(regXs[i]) && isFinite(regYs[i])) {
+                    validIndices.push(i);
+                }
+            }
+
+            const k = validIndices.length;
+            if (k < 2) return null;
+
+            let sumX = 0;
+            let sumY = 0;
+            let sumXY = 0;
+            let sumXX = 0;
+
+            for (let idx of validIndices) {
+                const xVal = regXs[idx];
+                const yVal = regYs[idx];
+                sumX += xVal;
+                sumY += yVal;
+                sumXY += xVal * yVal;
+                sumXX += xVal * xVal;
+            }
+
+            const denominator = k * sumXX - sumX * sumX;
+            if (denominator === 0) return null;
+
+            const slope = (k * sumXY - sumX * sumY) / denominator;
+            const intercept = (sumY - slope * sumX) / k;
+
+            const meanY = sumY / k;
+            let totalSumSquares = 0;
+            let residualSumSquares = 0;
+            for (let idx of validIndices) {
+                const xVal = regXs[idx];
+                const yVal = regYs[idx];
+                const predictedY = slope * xVal + intercept;
+                totalSumSquares += Math.pow(yVal - meanY, 2);
+                residualSumSquares += Math.pow(yVal - predictedY, 2);
+            }
+            const r2 = totalSumSquares === 0 ? 0 : 1 - (residualSumSquares / totalSumSquares);
+
+            const minX = Math.min(...validIndices.map(i => xs[i]));
+            const maxX = Math.max(...validIndices.map(i => xs[i]));
+
+            const predict = (linearX) => {
+                const regX = this.xLog ? Math.log10(linearX) : linearX;
+                const regY = slope * regX + intercept;
+                return this.yLog ? Math.pow(10, regY) : regY;
+            };
+
+            return {
+                x: [minX, maxX],
+                y: [predict(minX), predict(maxX)],
+                r2: r2
             };
         },
 

@@ -29,6 +29,7 @@ from abst.store import (
     get_abst_result_total,
     get_abst_results,
     get_scatterplot_data,
+    COMMUNE_STATS_METRICS,
 )
 
 router = Router()
@@ -198,13 +199,16 @@ class TestPredictionResponseSchema(Schema):
 
 
 def _scatter_metrics() -> list[dict[str, str]]:
-    return [
+    base_metrics = [
         {"id": "ja_prozent", "name": "Abstimmungsresultat Ja in %"},
         {"id": "stimmbeteiligung", "name": "Stimmbeteiligung in %"},
         {"id": "anzahl_stimmberechtigte", "name": "Anzahl Stimmberechtigte"},
         {"id": "wahlen_result", "name": "Wahlresultat"},
         {"id": "abstimmung_result", "name": "Andere Abstimmung"},
     ]
+    for k, v in COMMUNE_STATS_METRICS.items():
+        base_metrics.append({"id": k, "name": v})
+    return base_metrics
 
 
 def _scatter_scopes() -> list[dict[str, str]]:
@@ -659,3 +663,28 @@ def api_get_timeline(request, vorlage_id: int):
         return get_national_timeline(vorlage_id)
     except Exception as e:
         raise HttpError(400, str(e))
+
+
+class CorrelationItemSchema(Schema):
+    id: str
+    name: str
+    coefficient: float
+
+
+@router.get("{vorlage_id}/correlations/options")
+def get_correlations_options(request, vorlage_id: int):
+    options = [
+        m for m in _scatter_metrics()
+        if m["id"] not in ("wahlen_result", "abstimmung_result") and not m["id"].startswith("pop_age_")
+    ]
+    return {"metrics": options}
+
+
+@router.get("{vorlage_id}/correlations/data", response=list[CorrelationItemSchema])
+def get_correlations_data(request, vorlage_id: int, metric_id: str = "ja_prozent"):
+    from abst.store import get_correlations
+    try:
+        return get_correlations(vorlage_id, metric_id)
+    except Exception as exc:
+        raise HttpError(400, str(exc)) from exc
+

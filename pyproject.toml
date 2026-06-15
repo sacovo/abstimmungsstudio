@@ -29,6 +29,7 @@ dependencies = [
     "xlsxwriter>=3.2.9",
     "gunicorn>=25.1.0",
     "rpy2>=3.5.15",
+    "rich>=15.0.0",
 ]
 
 [dependency-groups]

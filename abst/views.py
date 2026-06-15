@@ -99,6 +99,12 @@ def vorlage_behavior_view(request, vorlage_id):
     return render(request, "abst/vorlage_behavior.html", {"vorlage": vorlage})
 
 
+def vorlage_correlations_view(request, vorlage_id):
+    vorlage = get_object_or_404(Vorlage, vorlagen_id=vorlage_id)
+    return render(request, "abst/vorlage_correlations.html", {"vorlage": vorlage})
+
+
+
 def evaluation_view(request):
     reports = PredictionEvaluationReport.objects.order_by("-created_at")
     latest_reports_dict = {}

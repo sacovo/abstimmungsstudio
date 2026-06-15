@@ -71,31 +71,42 @@
                     <div class="card-content" style="padding-bottom: 6px;">
                         <span class="card-title" style="font-size: 1.3rem;">Achsen und Daten</span>
 
+                        <div class="section" style="padding-top: 0; padding-bottom: 0;">
+                            <h6 style="margin: 0 0 0.5rem 0; font-weight: 600;">Diagramm-Typ</h6>
+                            <div class="input-field">
+                                <select x-model="chartType" @change="onChartTypeChange" x-ref="chartTypeSelect">
+                                    <option value="scatter">Scatterplot (Punktdiagramm)</option>
+                                    <option value="histogram">Histogramm (Verteilung)</option>
+                                </select>
+                                <label>Layout</label>
+                            </div>
+                        </div>
+
                         <div class="section" style="padding-top: 0;">
-                            <h6 style="margin: 0 0 0.5rem 0; font-weight: 600;">Achsen</h6>
+                            <h6 style="margin: 0 0 0.5rem 0; font-weight: 600;" x-text="chartType === 'scatter' ? 'Achsen' : 'Variable'"></h6>
 
                             <div class="input-field">
                                 <select x-model="xMetric" @change="onMetricChange" x-ref="xMetricSelect">
                                     <template x-for="metric in metrics" :key="metric.id + '-x'">
-                                        <option :value="metric.id" x-text="metric.name"></option>
+                                        <option :value="metric.id" :selected="metric.id === xMetric" x-text="metric.name"></option>
                                     </template>
                                 </select>
-                                <label>X-Achse</label>
+                                <label x-text="chartType === 'scatter' ? 'X-Achse' : 'Kennzahl'"></label>
                             </div>
 
-                            <div class="input-field">
+                            <div class="input-field" x-show="chartType === 'scatter'">
                                 <select x-model="yMetric" @change="onMetricChange" x-ref="yMetricSelect">
                                     <template x-for="metric in metrics" :key="metric.id + '-y'">
-                                        <option :value="metric.id" x-text="metric.name"></option>
+                                        <option :value="metric.id" :selected="metric.id === yMetric" x-text="metric.name"></option>
                                     </template>
                                 </select>
                                 <label>Y-Achse</label>
                             </div>
 
-                            <div class="input-field">
+                            <div class="input-field" x-show="chartType === 'scatter'">
                                 <select x-model="sizeMetric" @change="onMetricChange" x-ref="sizeMetricSelect">
                                     <template x-for="metric in metrics" :key="metric.id + '-size'">
-                                        <option :value="metric.id" x-text="metric.name"></option>
+                                        <option :value="metric.id" :selected="metric.id === sizeMetric" x-text="metric.name"></option>
                                     </template>
                                 </select>
                                 <label>Groesse</label>
@@ -104,11 +115,15 @@
                             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
                                 <label style="margin-bottom: 0;">
                                     <input type="checkbox" class="filled-in" x-model="xLog" @change="renderPlot()" />
-                                    <span>Log. X-Achse</span>
+                                    <span>Log. X-Achse/Variable</span>
                                 </label>
-                                <label style="margin-bottom: 0;">
+                                <label style="margin-bottom: 0;" x-show="chartType === 'scatter'">
                                     <input type="checkbox" class="filled-in" x-model="yLog" @change="renderPlot()" />
                                     <span>Log. Y-Achse</span>
+                                </label>
+                                <label style="margin-bottom: 0;" x-show="chartType === 'scatter'">
+                                    <input type="checkbox" class="filled-in" x-model="showRegression" @change="renderPlot()" />
+                                    <span>Trendlinie</span>
                                 </label>
                             </div>
                         </div>
@@ -119,7 +134,7 @@
                             <div class="input-field">
                                 <select x-model="wahlenScope" @change="onScopeChange" x-ref="scopeSelect">
                                     <template x-for="scope in scopes" :key="scope.id">
-                                        <option :value="scope.id" x-text="scope.name"></option>
+                                        <option :value="scope.id" :selected="scope.id === wahlenScope" x-text="scope.name"></option>
                                     </template>
                                 </select>
                                 <label>Wahl-Ebene</label>
@@ -128,7 +143,7 @@
                             <div class="input-field">
                                 <select x-model="wahlenOptionId" @change="loadData" x-ref="optionSelect">
                                     <template x-for="option in currentWahlenOptions()" :key="option.id">
-                                        <option :value="String(option.id)" x-text="option.name"></option>
+                                        <option :value="String(option.id)" :selected="String(option.id) === String(wahlenOptionId)" x-text="option.name"></option>
                                     </template>
                                 </select>
                                 <label>Wahl-Option</label>
@@ -161,7 +176,7 @@
                             <div class="input-field">
                                 <select x-model="abstimmungVorlageId" @change="loadData" x-ref="abstimmungVorlageSelect">
                                     <template x-for="vorlage in abstimmungResults" :key="vorlage.id">
-                                        <option :value="vorlage.id" x-text="`${vorlage.name} (${vorlage.region})`"></option>
+                                        <option :value="vorlage.id" :selected="vorlage.id === abstimmungVorlageId" x-text="`${vorlage.name} (${vorlage.region})`"></option>
                                     </template>
                                 </select>
                                 <label>Vergleichsvorlage</label>
@@ -177,18 +192,27 @@
                         </div>
 
                         <div class="section">
-                            <h6 style="margin: 0.5rem 0; font-weight: 600;">Farben</h6>
+                            <h6 style="margin: 0.5rem 0; font-weight: 600;">Farben & Layout</h6>
 
-                            <div class="input-field">
+                            <div class="input-field" x-show="chartType === 'scatter'">
                                 <select x-model="colorMetric" @change="loadData" x-ref="colorMetricSelect">
                                     <template x-for="mode in colorModes" :key="mode.id">
-                                        <option :value="mode.id" x-text="mode.name"></option>
+                                        <option :value="mode.id" :selected="mode.id === colorMetric" x-text="mode.name"></option>
                                     </template>
                                 </select>
                                 <label>Farbmodus</label>
                             </div>
 
-                            <div x-show="colorMetric === 'solid'" x-cloak style="margin-top: 1rem;">
+                            <div class="input-field" x-show="chartType === 'histogram'">
+                                <select x-model="histogramMode" @change="onHistogramModeChange" x-ref="histogramModeSelect">
+                                    <option value="stacked">Gestapelt (nach Kanton)</option>
+                                    <option value="grouped">Gruppiert (nach Kanton)</option>
+                                    <option value="solid">Einfarbig (Gesamt)</option>
+                                </select>
+                                <label>Histogramm-Modus</label>
+                            </div>
+
+                            <div x-show="(chartType === 'scatter' && colorMetric === 'solid') || (chartType === 'histogram' && histogramMode === 'solid')" x-cloak style="margin-top: 1rem;">
                                 <div style="display: flex; align-items: center; gap: 1rem;">
                                     <input type="color" x-model="solidColor" @change="renderPlot()" style="border: none; width: 40px; height: 40px; border-radius: 50%; cursor: pointer; padding: 0; background: none;">
                                     <div style="flex-grow: 1;">

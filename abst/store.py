@@ -381,13 +381,184 @@ def get_wahlen_results_lager(lager_id: int, mode: str = "current"):
     return get_wahlen_results_multi(partei_ids=partei_ids, mode=mode)
 
 
+COMMUNE_STATS_METRICS = {
+    "pop_total_2024": "Bevölkerung: Total (2024)",
+    "pop_foreign_2024": "Bevölkerung: Ausländer (2024)",
+    "pop_foreign_ratio_pct_2024": "Bevölkerung: Ausländeranteil % (2024)",
+    "pop_change_abs_10yr": "Bevölkerung: 10-Jahre Veränderung absolut",
+    "pop_change_pct_10yr": "Bevölkerung: 10-Jahre Veränderung %",
+    "pop_marital_single_2024": "Zivilstand: Ledig (2024)",
+    "pop_marital_single_ratio_pct_2024": "Zivilstand: Ledig % (2024)",
+    "pop_marital_married_2024": "Zivilstand: Verheiratet (2024)",
+    "pop_marital_married_ratio_pct_2024": "Zivilstand: Verheiratet % (2024)",
+    "pop_marital_widowed_2024": "Zivilstand: Verwitwet (2024)",
+    "pop_marital_widowed_ratio_pct_2024": "Zivilstand: Verwitwet % (2024)",
+    "pop_marital_divorced_2024": "Zivilstand: Geschieden (2024)",
+    "pop_marital_divorced_ratio_pct_2024": "Zivilstand: Geschieden % (2024)",
+    "pop_comp_births_2024": "Demografie: Geburten (2024)",
+    "pop_comp_births_rate_per_1000_2024": "Demografie: Geburtenrate pro 1000 Einwohner (2024)",
+    "pop_comp_deaths_2024": "Demografie: Todesfälle (2024)",
+    "pop_comp_deaths_rate_per_1000_2024": "Demografie: Sterberate pro 1000 Einwohner (2024)",
+    "pop_comp_in_migration_international_2024": "Zuzug international (2024)",
+    "pop_comp_out_migration_international_2024": "Wegzug international (2024)",
+    "pop_comp_in_migration_internal_2024": "Zuzug inländisch (2024)",
+    "pop_comp_out_migration_internal_2024": "Wegzug inländisch (2024)",
+    "pop_comp_net_migration_ratio_pct_2024": "Demografie: Netto-Wanderung % der Bevölkerung (2024)",
+    "area_settlement_ha": "Fläche: Siedlungsfläche ha",
+    "area_settlement_ratio_pct": "Fläche: Siedlungsfläche %",
+    "area_agriculture_ha": "Fläche: Landwirtschaftsfläche ha",
+    "area_agriculture_ratio_pct": "Fläche: Landwirtschaftsfläche %",
+    "area_forest_ha": "Fläche: Waldfläche ha",
+    "area_forest_ratio_pct": "Fläche: Waldfläche %",
+    "area_unproductive_ha": "Fläche: Unproduktive Fläche ha",
+    "area_unproductive_ratio_pct": "Fläche: Unproduktive Fläche %",
+    "area_total_ha": "Fläche: Total ha",
+    "area_settlement_change_ha": "Fläche: Siedlung Veränderung ha",
+    "area_agriculture_change_ha": "Fläche: Landwirtschaft Veränderung ha",
+    "area_forest_change_ha": "Fläche: Wald Veränderung ha",
+    "area_unproductive_change_ha": "Fläche: Unproduktiv Veränderung ha",
+    "businesses_total_2023": "Unternehmen: Total (2023)",
+    "businesses_density_per_1000_2023": "Unternehmen pro 1000 Einwohner (2023)",
+    "businesses_sector1_2023": "Unternehmen: Sektor 1 (2023)",
+    "businesses_sector1_ratio_pct_2023": "Unternehmen: Sektor 1 % (2023)",
+    "businesses_sector2_2023": "Unternehmen: Sektor 2 (2023)",
+    "businesses_sector2_ratio_pct_2023": "Unternehmen: Sektor 2 % (2023)",
+    "businesses_sector3_2023": "Unternehmen: Sektor 3 (2023)",
+    "businesses_sector3_ratio_pct_2023": "Unternehmen: Sektor 3 % (2023)",
+    "employees_total_2023": "Beschäftigte: Total (2023)",
+    "employees_density_per_1000_2023": "Beschäftigte pro 1000 Einwohner (2023)",
+    "employees_sector1_2023": "Beschäftigte: Sektor 1 (2023)",
+    "employees_sector1_ratio_pct_2023": "Beschäftigte: Sektor 1 % (2023)",
+    "employees_sector2_2023": "Beschäftigte: Sektor 2 (2023)",
+    "employees_sector2_ratio_pct_2023": "Beschäftigte: Sektor 2 % (2023)",
+    "employees_sector3_2023": "Beschäftigte: Sektor 3 (2023)",
+    "employees_sector3_ratio_pct_2023": "Beschäftigte: Sektor 3 % (2023)",
+    "businesses_change_abs_10yr": "Unternehmen: 10-Jahre Veränderung absolut",
+    "businesses_change_pct_10yr": "Unternehmen: 10-Jahre Veränderung %",
+    "employees_change_abs_10yr": "Beschäftigte: 10-Jahre Veränderung absolut",
+    "employees_change_pct_10yr": "Beschäftigte: 10-Jahre Veränderung %",
+    "vehicles_passenger_cars_2024": "Fahrzeuge: Personenwagen (2024)",
+    "vehicles_passenger_cars_ratio_per_1000": "Fahrzeuge: Personenwagen pro 1000 Einwohner (2024)",
+    "vehicles_passenger_cars_change_abs_10yr": "Fahrzeuge: Personenwagen 10-Jahre Var absolut",
+    "vehicles_passenger_cars_change_pct_10yr": "Fahrzeuge: Personenwagen 10-Jahre Var %",
+    "tourism_arrivals_2024": "Tourismus: Ankünfte (2024)",
+    "tourism_arrivals_ratio_per_resident_2024": "Tourismus: Ankünfte pro Einwohner (2024)",
+    "tourism_nights_2024": "Tourismus: Logiernächte (2024)",
+    "tourism_nights_ratio_per_resident_2024": "Tourismus: Logiernächte pro Einwohner (2024)",
+    "pop_density_per_settlement_ha": "Bevölkerungsdichte (Einwohner/Siedlungsfläche ha)",
+    "age_bucket_0_17_2024": "Altersklasse: 0–17 Jahre (2024)",
+    "age_bucket_0_17_ratio_pct_2024": "Altersklasse: 0–17 Jahre % (2024)",
+    "age_bucket_18_29_2024": "Altersklasse: 18–29 Jahre (2024)",
+    "age_bucket_18_29_ratio_pct_2024": "Altersklasse: 18–29 Jahre % (2024)",
+    "age_bucket_30_49_2024": "Altersklasse: 30–49 Jahre (2024)",
+    "age_bucket_30_49_ratio_pct_2024": "Altersklasse: 30–49 Jahre % (2024)",
+    "age_bucket_50_64_2024": "Altersklasse: 50–64 Jahre (2024)",
+    "age_bucket_50_64_ratio_pct_2024": "Altersklasse: 50–64 Jahre % (2024)",
+    "age_bucket_65_plus_2024": "Altersklasse: 65+ Jahre (2024)",
+    "age_bucket_65_plus_ratio_pct_2024": "Altersklasse: 65+ Jahre % (2024)",
+}
+for i in range(101):
+    COMMUNE_STATS_METRICS[f"pop_age_{i}_2024"] = f"Alter: {i} Jahre (2024)"
+
 SCATTER_ALLOWED_METRICS = {
     "ja_prozent",
     "stimmbeteiligung",
     "anzahl_stimmberechtigte",
     "wahlen_result",
     "abstimmung_result",
-}
+} | set(COMMUNE_STATS_METRICS.keys())
+
+
+def store_commune_stats(commune_data: list[dict]) -> int:
+    import numpy as np
+    timestamp = int(datetime.datetime.now().timestamp() * 1_000_000_000)
+    points = []
+    for row in commune_data:
+        bfs_code = row.get("bfs_code")
+        if not bfs_code:
+            continue
+
+        fields = {}
+        for k, v in row.items():
+            if k in ("bfs_code", "commune_name"):
+                continue
+            if v is None:
+                continue
+            # Handle float/int conversions to avoid np.nan/pd.NA issues
+            if isinstance(v, (int, float, np.integer, np.floating)):
+                if np.isnan(v):
+                    continue
+                fields[k] = float(v)
+            elif isinstance(v, str):
+                fields[k] = v
+
+        if not fields:
+            continue
+
+        points.append(
+            {
+                "measurement": "commune_stats",
+                "tags": {
+                    "geo_id": int(bfs_code),
+                },
+                "fields": fields,
+                "time": timestamp,
+            }
+        )
+
+    if not points:
+        return 0
+
+    with get_influx_client() as client:
+        write_api = client.write_api(write_options=SYNCHRONOUS)
+        write_api.write(bucket=settings.INFLUX_BUCKET, record=points)
+
+    return len(points)
+
+
+def get_commune_stats(fields: list[str]) -> pl.DataFrame | None:
+    if not fields:
+        return None
+
+    # Filter out empty or invalid fields
+    fields = [f for f in fields if f in COMMUNE_STATS_METRICS]
+    if not fields:
+        return None
+
+    field_filters = " or ".join([f'r._field == "{field}"' for field in fields])
+
+    with get_influx_client() as client:
+        query_api = client.query_api()
+        query = f'''
+        from(bucket: "{settings.INFLUX_BUCKET}")
+          |> range(start: -100y)
+          |> filter(fn: (r) => r._measurement == "commune_stats")
+          |> filter(fn: (r) => {field_filters})
+          |> group(columns: ["geo_id", "_field"])
+          |> last()
+          |> pivot(rowKey:["geo_id"], columnKey: ["_field"], valueColumn: "_value")
+          |> sort(columns: ["geo_id"])
+        '''
+        result = query_api.query_data_frame(query)
+
+        if isinstance(result, list):
+            if len(result) == 0:
+                return None
+            result = pd.concat(result)
+
+        if len(result) == 0:
+            return None
+
+        df = pl.from_pandas(result)
+        
+        if "geo_id" in df.columns:
+            df = df.with_columns(geo_id=pl.col("geo_id").cast(pl.Int32))
+            
+        for field in fields:
+            if field not in df.columns:
+                df = df.with_columns(pl.lit(None).cast(pl.Float64).alias(field))
+                
+        return df.select(["geo_id"] + fields)
 
 
 def _empty_scatter_df() -> pl.DataFrame:
@@ -512,6 +683,15 @@ def get_scatterplot_data(
 
     merged = abst_df.join(geo_df, on="geo_id", how="inner")
 
+    commune_stats_fields = [m for m in metrics if m in COMMUNE_STATS_METRICS]
+    if commune_stats_fields:
+        stats_df = get_commune_stats(commune_stats_fields)
+        if stats_df is not None and not stats_df.is_empty():
+            merged = merged.join(stats_df, on="geo_id", how="left")
+        else:
+            for f in commune_stats_fields:
+                merged = merged.with_columns(pl.lit(None).cast(pl.Float64).alias(f))
+
     if needs_wahlen:
         if wahlen_option_id is None:
             raise ValueError(
@@ -560,6 +740,8 @@ def get_scatterplot_data(
         "wahlen_result": pl.col("wahlen_value").cast(pl.Float64),
         "abstimmung_result": pl.col("abstimmung_value").cast(pl.Float64),
     }
+    for f in commune_stats_fields:
+        metric_to_expr[f] = pl.col(f).cast(pl.Float64)
 
     result = merged.with_columns(
         metric_to_expr[x_metric].alias("x_value"),
@@ -1214,3 +1396,71 @@ def get_national_timeline(abst_id: int):
             .sort("time")
         )
         return result.to_dicts()
+
+
+def get_correlations(vorlage_id: int, selected_metric: str) -> list[dict]:
+    cache_key = f"correlations:{vorlage_id}:{selected_metric}"
+    cached_res = cache.get(cache_key)
+    if cached_res is not None:
+        return cached_res
+
+    # 1. Fetch vote results for this vorlage
+    vorlage = Vorlage.objects.select_related("tag__stand").get(vorlagen_id=vorlage_id)
+    geo_df = _get_scatter_geo_df(vorlage)
+    if geo_df.is_empty():
+        return []
+
+    abst_df = get_abst_results(vorlage_id)
+    if abst_df is None:
+        return []
+
+    merged = abst_df.join(geo_df, on="geo_id", how="inner")
+
+    # 2. Fetch all commune statistics
+    all_stats_fields = [k for k in COMMUNE_STATS_METRICS.keys() if not k.startswith("pop_age_")]
+    stats_df = get_commune_stats(all_stats_fields)
+    if stats_df is not None and not stats_df.is_empty():
+        merged = merged.join(stats_df, on="geo_id", how="left")
+
+    # 3. List of numeric variables to correlate
+    variables = ["ja_prozent", "stimmbeteiligung", "anzahl_stimmberechtigte"] + all_stats_fields
+    
+    # Ensure all variables are in merged and cast to float
+    for var in variables:
+        if var not in merged.columns:
+            merged = merged.with_columns(pl.lit(None).cast(pl.Float64).alias(var))
+        else:
+            merged = merged.with_columns(pl.col(var).cast(pl.Float64))
+
+    # Convert to pandas for correlation
+    df_pd = merged.select(variables).to_pandas()
+    
+    if selected_metric not in df_pd.columns:
+        return []
+        
+    # Calculate Pearson correlations
+    corr_series = df_pd.corr()[selected_metric]
+    
+    results = []
+    
+    name_map = {
+        "ja_prozent": "Abstimmungsresultat Ja in %",
+        "stimmbeteiligung": "Stimmbeteiligung in %",
+        "anzahl_stimmberechtigte": "Anzahl Stimmberechtigte",
+        **COMMUNE_STATS_METRICS
+    }
+
+    for var, coef in corr_series.items():
+        if var == selected_metric:
+            continue
+        if pd.isna(coef):
+            continue
+        results.append({
+            "id": var,
+            "name": name_map.get(var, var),
+            "coefficient": float(coef)
+        })
+        
+    results.sort(key=lambda x: abs(x["coefficient"]), reverse=True)
+    cache.set(cache_key, results, timeout=300) # cache for 5 minutes
+    return results

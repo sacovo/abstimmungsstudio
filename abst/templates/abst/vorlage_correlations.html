@@ -1,0 +1,277 @@
+{% extends 'abst/base.html' %}
+{% load static %}
+
+{% block title %}{{ vorlage.name }} - Korrelationsanalyse{% endblock %}
+
+{% block nav %}
+{% include 'abst/includes/vorlage_nav.html' %}
+{% endblock %}
+
+{% block content %}
+<article x-data="correlationsView('{{ vorlage.vorlagen_id }}')" x-init="init()" x-cloak>
+    <h4>{{ vorlage.name }} - Korrelationsanalyse</h4>
+
+    <style>
+        .correlations-layout {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+            align-items: stretch;
+        }
+
+        .config-pane {
+            flex: 1 1 30%;
+            max-width: calc(30% - 0.75rem);
+            min-width: 300px;
+        }
+
+        .results-pane {
+            flex: 1 1 70%;
+            max-width: calc(70% - 0.75rem);
+            min-width: 400px;
+        }
+
+        @media (max-width: 992px) {
+            .config-pane,
+            .results-pane {
+                flex-basis: 100%;
+                max-width: 100%;
+            }
+        }
+
+        .strength-indicator {
+            height: 12px;
+            border-radius: 6px;
+            display: inline-block;
+            transition: width 0.3s ease;
+        }
+
+        .pos-bar {
+            background: linear-gradient(90deg, #64b5f6, #1565c0);
+        }
+
+        .neg-bar {
+            background: linear-gradient(90deg, #ff8a65, #c62828);
+        }
+
+        .corr-row {
+            cursor: pointer;
+        }
+
+        .corr-row:hover {
+            background-color: rgba(25, 118, 210, 0.05) !important;
+        }
+
+        [x-cloak] {
+            display: none !important;
+        }
+    </style>
+
+    <div class="row correlations-layout">
+        <!-- Sidebar Controls -->
+        <aside class="col s12 config-pane">
+            <div class="card style-card" style="border-radius: 12px; margin: 0; height: 100%;">
+                <div class="card-content">
+                    <span class="card-title" style="font-size: 1.3rem; font-weight: 600;">Variable wählen</span>
+                    <p style="color: #607d8b; margin-bottom: 1.5rem; font-size: 0.95rem;">
+                        Wählen Sie eine Kennzahl aus, um deren linearen Zusammenhang (Bravais-Pearson-Korrelationskoeffizient) mit allen anderen Merkmalen auf Gemeindeebene zu berechnen.
+                    </p>
+
+                    <div class="input-field" style="margin-top: 2rem;">
+                        <select x-model="selectedMetric" @change="fetchCorrelations" x-ref="metricSelect">
+                            <template x-for="m in metrics" :key="m.id">
+                                <option :value="m.id" x-text="m.name"></option>
+                            </template>
+                        </select>
+                        <label>Zielvariable</label>
+                    </div>
+
+                    <div style="margin-top: 3rem;">
+                        <h6 style="font-weight: 600; margin-bottom: 0.8rem;">Statistische Info</h6>
+                        <div style="background-color: #f5f7fa; border-radius: 8px; padding: 1rem; font-size: 0.9rem; border-left: 4px solid #1976d2;">
+                            <p style="margin: 0 0 0.5rem 0;"><strong>r = 1.0</strong>: Perfekte positive Korrelation</p>
+                            <p style="margin: 0 0 0.5rem 0;"><strong>r = 0.0</strong>: Kein linearer Zusammenhang</p>
+                            <p style="margin: 0;"><strong>r = -1.0</strong>: Perfekte negative Korrelation</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Correlation Results List -->
+        <div class="col s12 results-pane">
+            <div class="card" style="border-radius: 12px; margin: 0; min-height: 500px;">
+                <div class="card-content" style="padding-bottom: 0;">
+                    <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                        <span class="card-title" style="font-size: 1.3rem; font-weight: 600; margin: 0;">Ergebnisse</span>
+                        
+                        <!-- Search Input -->
+                        <div class="input-field" style="margin: 0; width: 250px;">
+                            <i class="material-symbols-outlined prefix" style="font-size: 1.5rem; line-height: 3rem;">search</i>
+                            <input id="search-input" type="text" x-model="searchQuery" style="margin: 0; height: 2.5rem; font-size: 0.95rem;">
+                            <label for="search-input" style="transform: translateY(-8px);">Variable filtern...</label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading Spinner -->
+                <div x-show="loading" style="padding: 5rem 0; text-align: center;">
+                    <div class="preloader-wrapper big active">
+                        <div class="spinner-layer spinner-blue-only">
+                            <div class="circle-clipper left"><div class="circle"></div></div>
+                            <div class="gap-patch"><div class="circle"></div></div>
+                            <div class="circle-clipper right"><div class="circle"></div></div>
+                        </div>
+                    </div>
+                    <p style="margin-top: 1rem; color: #607d8b;">Korrelationen werden berechnet...</p>
+                </div>
+
+                <!-- Error Message -->
+                <div x-show="error" style="padding: 2rem; text-align: center;" x-cloak>
+                    <p class="red-text" x-text="error"></p>
+                </div>
+
+                <!-- Results Table -->
+                <div x-show="!loading && !error" style="padding: 0 1.5rem 1.5rem 1.5rem;">
+                    <table class="highlight responsive-table" style="font-size: 0.95rem;">
+                        <thead>
+                            <tr>
+                                <th style="width: 45%;">Variable</th>
+                                <th style="width: 15%; text-align: center;">Koeffizient (r)</th>
+                                <th style="width: 30%;">Stärke & Richtung</th>
+                                <th style="width: 10%; text-align: center;">Visualisieren</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="item in filteredCorrelations()" :key="item.id">
+                                <tr class="corr-row" @click="openScatterLink(item.id)">
+                                    <td>
+                                        <span style="font-weight: 500;" x-text="item.name"></span>
+                                        <div style="font-size: 0.8rem; color: #90a4ae;" x-text="item.id"></div>
+                                    </td>
+                                    <td style="text-align: center; font-family: monospace; font-size: 1.1rem; font-weight: bold;" 
+                                        :class="item.coefficient >= 0 ? 'blue-text text-darken-2' : 'deep-orange-text text-darken-3'">
+                                        <span x-text="(item.coefficient >= 0 ? '+' : '') + item.coefficient.toFixed(3)"></span>
+                                    </td>
+                                    <td>
+                                        <div style="display: flex; align-items: center; gap: 0.8rem;">
+                                            <div style="flex-grow: 1; background-color: #cfd8dc; height: 12px; border-radius: 6px; position: relative;">
+                                                <div class="strength-indicator" 
+                                                     :class="item.coefficient >= 0 ? 'pos-bar' : 'neg-bar'" 
+                                                     :style="`width: ${Math.abs(item.coefficient) * 100}%;` + (item.coefficient < 0 ? 'position: absolute; right: 0;' : 'position: absolute; left: 0;')">
+                                                </div>
+                                            </div>
+                                            <span style="font-size: 0.85rem; font-weight: bold; width: 60px; text-align: right;" 
+                                                  x-text="getCorrelationText(item.coefficient)">
+                                            </span>
+                                        </div>
+                                    </td>
+                                    <td style="text-align: center;">
+                                        <a :href="`/${vorlageId}/analyse/?x_metric=${item.id}&y_metric=${selectedMetric}`" 
+                                           class="btn-floating btn-small waves-effect waves-light blue-grey darken-1"
+                                           @click.stop
+                                           style="display: inline-flex; align-items: center; justify-content: center;"
+                                           title="Im Scatterplot anzeigen">
+                                            <i class="material-symbols-outlined" style="font-size: 1.2rem;">scatter_plot</i>
+                                        </a>
+                                    </td>
+                                </tr>
+                            </template>
+                            <tr x-show="filteredCorrelations().length === 0">
+                                <td colspan="4" style="text-align: center; color: #90a4ae; padding: 2rem;">
+                                    Keine Variablen passend zu Ihrer Suche gefunden.
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</article>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('correlationsView', (vorlageId) => ({
+        vorlageId: vorlageId,
+        loading: false,
+        error: '',
+        metrics: [],
+        selectedMetric: 'ja_prozent',
+        correlations: [],
+        searchQuery: '',
+
+        async init() {
+            this.loading = true;
+            try {
+                // Fetch metrics options
+                const resOpts = await fetch(`/api/abst/${this.vorlageId}/correlations/options`);
+                if (!resOpts.ok) throw new Error("Optionen konnten nicht geladen werden.");
+                const dataOpts = await resOpts.json();
+                this.metrics = dataOpts.metrics || [];
+
+                if (this.metrics.length > 0) {
+                    this.selectedMetric = this.metrics[0].id;
+                }
+
+                this.refreshSelect();
+                await this.fetchCorrelations();
+            } catch (err) {
+                this.error = err.message || "Fehler beim Initialisieren.";
+                console.error(err);
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        async fetchCorrelations() {
+            this.loading = true;
+            this.error = '';
+            try {
+                const res = await fetch(`/api/abst/${this.vorlageId}/correlations/data?metric_id=${this.selectedMetric}`);
+                if (!res.ok) throw new Error("Korrelationsdaten konnten nicht geladen werden.");
+                this.correlations = await res.json();
+            } catch (err) {
+                this.error = err.message || "Fehler beim Berechnen der Korrelationen.";
+                console.error(err);
+                this.correlations = [];
+            } finally {
+                this.loading = false;
+            }
+        },
+
+        filteredCorrelations() {
+            if (!this.searchQuery) return this.correlations;
+            const q = this.searchQuery.toLowerCase().trim();
+            return this.correlations.filter(c => 
+                c.name.toLowerCase().includes(q) || 
+                c.id.toLowerCase().includes(q)
+            );
+        },
+
+        getCorrelationText(r) {
+            const absR = Math.abs(r);
+            if (absR >= 0.8) return 'Stark';
+            if (absR >= 0.5) return 'Mittel';
+            if (absR >= 0.2) return 'Schwach';
+            return 'Minim';
+        },
+
+        openScatterLink(otherMetricId) {
+            // Click to open scatterplot view with these two metrics selected!
+            const params = new URLSearchParams({
+                x_metric: otherMetricId,
+                y_metric: this.selectedMetric
+            });
+            window.location.href = `/${this.vorlageId}/analyse/?${params.toString()}`;
+        },
+
+        refreshSelect() {
+            setTimeout(() => {
+                M.FormSelect.init(this.$refs.metricSelect);
+            }, 0);
+        }
+    }));
+});
+</script>
+{% endblock %}

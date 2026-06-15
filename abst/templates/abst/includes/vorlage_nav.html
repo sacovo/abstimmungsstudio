@@ -27,17 +27,13 @@
                 <i class="material-symbols-outlined left">table_chart</i>Tabelle
             </a>
         </li>
+        <!-- Analysen Dropdown Trigger -->
         <li>
-            <a href="{% url 'abst:vorlage_scatterplot' vorlage.vorlagen_id %}">
-                <i class="material-symbols-outlined left">scatter_plot</i>Analyse
+            <a class="dropdown-trigger" href="#!" data-target="analysis-dropdown" x-ref="analysisDropdownTrigger">
+                <i class="material-symbols-outlined left">insights</i>Analysen<i class="material-symbols-outlined right" style="margin-left: 4px;">arrow_drop_down</i>
             </a>
         </li>
         {% if user.is_authenticated %}
-        <li>
-            <a href="{% url 'abst:vorlage_behavior' vorlage.vorlagen_id %}">
-                <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
-            </a>
-        </li>
         <li>
             <a href="{% url 'abst:manual_entry' %}">
                 <i class="material-symbols-outlined left">edit_note</i>Resultate erfassen
@@ -50,28 +46,50 @@
             <a class="dropdown-trigger" href="#!" data-target="vorlagen-dropdown" x-ref="dropdownTrigger">
                 <i class="material-symbols-outlined left">arrow_drop_down</i>Andere Vorlagen am {{ vorlage.tag.date|date:"d.m.Y" }}
             </a>
-            <ul id="vorlagen-dropdown" class="dropdown-content" style="width: 400px !important;">
-                <li style="padding: 10px;">
-                    <div class="input-field" style="margin: 0; padding: 0;">
-                        <input type="text" placeholder="Suchen..." x-model="search" @input.debounce="fetchVorlagen" style="margin: 0;">
-                    </div>
-                </li>
-                <template x-for="v in vorlagen" :key="v.vorlagen_id">
-                    <li>
-                            <a :href="'/' + v.vorlagen_id + '/' + currentViewPath()" class="black-text truncate" :title="v.name">
-                            <span x-text="v.name.slice(0, 50) + (v.name.length > 50 ? '...' : '') + ' (' + v.region + ')'"></span>
-                        </a>
-                    </li>
-                </template>
-                <li x-show="vorlagen.length === 0">
-                    <a href="#!" class="grey-text">Keine Vorlagen gefunden.</a>
-                </li>
-            </ul>
+        </li>
+    </ul>
+
+    <!-- Analysen Dropdown Structure -->
+    <ul id="analysis-dropdown" class="dropdown-content">
+        <li>
+            <a href="{% url 'abst:vorlage_scatterplot' vorlage.vorlagen_id %}" class="black-text" style="display: flex; align-items: center; gap: 8px;">
+                <i class="material-symbols-outlined" style="color: #1976d2;">scatter_plot</i>Diagramme (Scatterplot)
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:vorlage_correlations' vorlage.vorlagen_id %}" class="black-text" style="display: flex; align-items: center; gap: 8px;">
+                <i class="material-symbols-outlined" style="color: #4caf50;">insights</i>Korrelationen
+            </a>
+        </li>
+        {% if user.is_authenticated %}
+        <li>
+            <a href="{% url 'abst:vorlage_behavior' vorlage.vorlagen_id %}" class="black-text" style="display: flex; align-items: center; gap: 8px;">
+                <i class="material-symbols-outlined" style="color: #ff9800;">analytics</i>Wählerwanderung
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+
+    <!-- Search Dropdown Structure -->
+    <ul id="vorlagen-dropdown" class="dropdown-content" style="width: 400px !important;">
+        <li style="padding: 10px;">
+            <div class="input-field" style="margin: 0; padding: 0;">
+                <input type="text" placeholder="Suchen..." x-model="search" @input.debounce="fetchVorlagen" style="margin: 0;">
+            </div>
+        </li>
+        <template x-for="v in vorlagen" :key="v.vorlagen_id">
+            <li>
+                <a :href="'/' + v.vorlagen_id + '/' + currentViewPath()" class="black-text truncate" :title="v.name">
+                    <span x-text="v.name.slice(0, 50) + (v.name.length > 50 ? '...' : '') + ' (' + v.region + ')'"></span>
+                </a>
+            </li>
+        </template>
+        <li x-show="vorlagen.length === 0">
+            <a href="#!" class="grey-text">Keine Vorlagen gefunden.</a>
         </li>
     </ul>
 
     <ul id="vorlage-nav-sidenav" class="sidenav" x-ref="sidenav">
-
         {% include 'abst/includes/nav_header.html' %}
         <li>
             <a href="{% url 'abst:abstimmungstag' vorlage.tag.date|date:'Y-m-d' %}">
@@ -88,9 +106,16 @@
                 <i class="material-symbols-outlined left">table_chart</i>Tabelle
             </a>
         </li>
+        <li><div class="divider"></div></li>
+        <li><a class="subheader">Analysen</a></li>
         <li>
             <a href="{% url 'abst:vorlage_scatterplot' vorlage.vorlagen_id %}">
-                <i class="material-symbols-outlined left">scatter_plot</i>Analyse
+                <i class="material-symbols-outlined left">scatter_plot</i>Diagramme (Scatterplot)
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:vorlage_correlations' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">insights</i>Korrelationen
             </a>
         </li>
         {% if user.is_authenticated %}
@@ -99,6 +124,9 @@
                 <i class="material-symbols-outlined left">analytics</i>Wählerwanderung
             </a>
         </li>
+        {% endif %}
+        <li><div class="divider"></div></li>
+        {% if user.is_authenticated %}
         <li>
             <a href="{% url 'abst:manual_entry' %}">
                 <i class="material-symbols-outlined left">edit_note</i>Resultate erfassen
@@ -136,6 +164,13 @@ document.addEventListener('alpine:init', () => {
                         closeOnClick: false
                     });
                 }
+                if (this.$refs.analysisDropdownTrigger) {
+                    M.Dropdown.init(this.$refs.analysisDropdownTrigger, {
+                        constrainWidth: false,
+                        coverTrigger: false,
+                        closeOnClick: true
+                    });
+                }
                 if (this.$refs.sidenav) {
                     M.Sidenav.init(this.$refs.sidenav);
                 }
@@ -162,6 +197,7 @@ document.addEventListener('alpine:init', () => {
             if (window.location.pathname.includes('table')) return 'table/';
             if (window.location.pathname.includes('analyse')) return 'analyse/';
             if (window.location.pathname.includes('behavior')) return 'behavior/';
+            if (window.location.pathname.includes('correlations')) return 'correlations/';
             return 'map/';
         },
 
