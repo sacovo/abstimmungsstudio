@@ -383,6 +383,10 @@ class Command(BaseCommand):
         mcp.settings.host = host
         mcp.settings.port = port
 
+        # If binding to a non-local host, disable DNS rebinding protection so reverse proxies can route requests
+        if host not in ("127.0.0.1", "localhost", "::1"):
+            mcp.settings.transport_security = None
+
         # Start the MCP server using FastMCP's built-in run method
         if transport == "stdio":
             # In stdio transport, check if API key is in environment, but warn that it won't be checked per-request
