@@ -185,3 +185,8 @@ def manual_entry_view(request):
 
 def waehlerwanderung_info_view(request):
     return render(request, "abst/waehlerwanderung_info.html", {})
+
+
+def vorlage_residuals_view(request, vorlage_id):
+    vorlage = get_object_or_404(Vorlage, vorlagen_id=vorlage_id)
+    return render(request, "abst/vorlage_residuals.html", {"vorlage": vorlage})

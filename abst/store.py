@@ -572,6 +572,8 @@ def _empty_scatter_df() -> pl.DataFrame:
             "ja_prozent": pl.Float64,
             "stimmbeteiligung": pl.Float64,
             "anzahl_stimmberechtigte": pl.Int64,
+            "ja_stimmen": pl.Int64,
+            "nein_stimmen": pl.Int64,
             "wahlen_value": pl.Float64,
             "abstimmung_value": pl.Float64,
             "x_value": pl.Float64,
@@ -768,6 +770,8 @@ def get_scatterplot_data(
         "ja_prozent",
         "stimmbeteiligung",
         "anzahl_stimmberechtigte",
+        "ja_stimmen",
+        "nein_stimmen",
         "wahlen_value",
         "abstimmung_value",
         "x_value",
@@ -1398,6 +1402,24 @@ def get_national_timeline(abst_id: int):
         return result.to_dicts()
 
 
+def weighted_pearson_corr(x, y, w):
+    import numpy as np
+    mask = np.isfinite(x) & np.isfinite(y) & np.isfinite(w) & (w > 0)
+    x_clean = x[mask]
+    y_clean = y[mask]
+    w_clean = w[mask]
+    if len(x_clean) < 2 or np.sum(w_clean) == 0:
+        return np.nan
+    x_mean = np.average(x_clean, weights=w_clean)
+    y_mean = np.average(y_clean, weights=w_clean)
+    cov = np.sum(w_clean * (x_clean - x_mean) * (y_clean - y_mean))
+    var_x = np.sum(w_clean * (x_clean - x_mean) ** 2)
+    var_y = np.sum(w_clean * (y_clean - y_mean) ** 2)
+    if var_x == 0 or var_y == 0:
+        return np.nan
+    return cov / np.sqrt(var_x * var_y)
+
+
 def get_correlations(vorlage_id: int, selected_metric: str) -> list[dict]:
     cache_key = f"correlations:{vorlage_id}:{selected_metric}"
     cached_res = cache.get(cache_key)
@@ -1422,6 +1444,11 @@ def get_correlations(vorlage_id: int, selected_metric: str) -> list[dict]:
     if stats_df is not None and not stats_df.is_empty():
         merged = merged.join(stats_df, on="geo_id", how="left")
 
+    # Add votes column for weighted correlation
+    merged = merged.with_columns(
+        (pl.col("ja_stimmen").fill_null(0) + pl.col("nein_stimmen").fill_null(0)).cast(pl.Float64).alias("votes")
+    )
+
     # 3. List of numeric variables to correlate
     variables = ["ja_prozent", "stimmbeteiligung", "anzahl_stimmberechtigte"] + all_stats_fields
     
@@ -1433,14 +1460,11 @@ def get_correlations(vorlage_id: int, selected_metric: str) -> list[dict]:
             merged = merged.with_columns(pl.col(var).cast(pl.Float64))
 
     # Convert to pandas for correlation
-    df_pd = merged.select(variables).to_pandas()
+    df_pd = merged.select(variables + ["votes"]).to_pandas()
     
     if selected_metric not in df_pd.columns:
         return []
         
-    # Calculate Pearson correlations
-    corr_series = df_pd.corr()[selected_metric]
-    
     results = []
     
     name_map = {
@@ -1450,9 +1474,17 @@ def get_correlations(vorlage_id: int, selected_metric: str) -> list[dict]:
         **COMMUNE_STATS_METRICS
     }
 
-    for var, coef in corr_series.items():
+    for var in variables:
         if var == selected_metric:
             continue
+        if var not in df_pd.columns:
+            continue
+            
+        if selected_metric == "ja_prozent" or var == "ja_prozent":
+            coef = weighted_pearson_corr(df_pd[selected_metric], df_pd[var], df_pd["votes"])
+        else:
+            coef = df_pd[selected_metric].corr(df_pd[var])
+
         if pd.isna(coef):
             continue
         results.append({
@@ -1464,3 +1496,121 @@ def get_correlations(vorlage_id: int, selected_metric: str) -> list[dict]:
     results.sort(key=lambda x: abs(x["coefficient"]), reverse=True)
     cache.set(cache_key, results, timeout=300) # cache for 5 minutes
     return results
+
+
+def get_residuals_data(vorlage_id: int) -> list[dict]:
+    from abst.geo import get_geo_id_list
+    import numpy as np
+
+    try:
+        vorlage = Vorlage.objects.select_related("tag__stand").get(vorlagen_id=vorlage_id)
+    except Vorlage.DoesNotExist:
+        return []
+
+    if (
+        vorlage.tag.projection is None
+        or not vorlage.tag.projection.name
+        or vorlage.tag.projection_bet is None
+        or not vorlage.tag.projection_bet.name
+    ):
+        return []
+
+    try:
+        proj_ja = np.load(vorlage.tag.projection.open("rb"))
+        proj_bet = np.load(vorlage.tag.projection_bet.open("rb"))
+    except Exception as e:
+        return []
+
+    geo_ids = get_geo_id_list(vorlage.tag.stand)
+    if not geo_ids:
+        return []
+    geo_id_to_idx = {geo_id: idx for idx, geo_id in enumerate(geo_ids)}
+
+    with get_influx_client() as client:
+        query_api = client.query_api()
+        query = f'''
+        from(bucket: "{settings.INFLUX_BUCKET}")
+          |> range(start: -100y)
+          |> filter(fn: (r) => r._measurement == "result" and r.vorlage_id == "{vorlage_id}")
+          |> last()
+          |> pivot(rowKey:["geo_id", "status"], columnKey: ["_field"], valueColumn: "_value")
+        '''
+        df_pd = query_api.query_data_frame(query)
+        if isinstance(df_pd, list):
+            df_pd = pd.concat(df_pd)
+        if len(df_pd) == 0:
+            return []
+        
+        df = pl.from_pandas(df_pd)
+        
+        cols = df.columns
+        if "ja_prozent" not in cols or "stimmbeteiligung" not in cols or "status" not in cols:
+            return []
+            
+        df_final = df.filter(pl.col("status") == "final").select(
+            geo_id=pl.col("geo_id").cast(pl.Int32),
+            actual_ja=pl.col("ja_prozent").cast(pl.Float64),
+            actual_bet=pl.col("stimmbeteiligung").cast(pl.Float64),
+            anzahl_stimmberechtigte=pl.col("anzahl_stimmberechtigte").cast(pl.Int64)
+        ).filter(
+            pl.col("actual_ja").is_not_null() &
+            pl.col("actual_bet").is_not_null()
+        )
+        
+        if df_final.is_empty():
+            return []
+
+        # Find matching indices in projection matrix
+        indices = []
+        valid_rows = []
+        for row in df_final.iter_rows(named=True):
+            gid = row["geo_id"]
+            if gid in geo_id_to_idx:
+                valid_rows.append(row)
+                indices.append(geo_id_to_idx[gid])
+
+        if not valid_rows:
+            return []
+
+        # Fit Ridge regression for ja_prozent (alpha = 50.0)
+        basis_known_ja = proj_ja[indices]
+        y_known_ja = np.array([r["actual_ja"] for r in valid_rows])
+        alpha = 50.0
+        XTX_ja = basis_known_ja.T @ basis_known_ja
+        XTy_ja = basis_known_ja.T @ y_known_ja
+        A_ja = XTX_ja + alpha * np.eye(XTX_ja.shape[0])
+        coeffs_ja = np.linalg.solve(A_ja, XTy_ja)
+        y_pred_ja = np.clip(basis_known_ja @ coeffs_ja, 0.0, 100.0)
+
+        # Fit Ridge regression for stimmbeteiligung (alpha = 50.0)
+        basis_known_bet = proj_bet[indices]
+        y_known_bet = np.array([r["actual_bet"] for r in valid_rows])
+        XTX_bet = basis_known_bet.T @ basis_known_bet
+        XTy_bet = basis_known_bet.T @ y_known_bet
+        A_bet = XTX_bet + alpha * np.eye(XTX_bet.shape[0])
+        coeffs_bet = np.linalg.solve(A_bet, XTy_bet)
+        y_pred_bet = np.clip(basis_known_bet @ coeffs_bet, 0.0, 100.0)
+
+        merged = pl.DataFrame({
+            "geo_id": [r["geo_id"] for r in valid_rows],
+            "actual_ja": y_known_ja.tolist(),
+            "predicted_ja": y_pred_ja.tolist(),
+            "actual_bet": y_known_bet.tolist(),
+            "predicted_bet": y_pred_bet.tolist(),
+            "anzahl_stimmberechtigte": [r["anzahl_stimmberechtigte"] for r in valid_rows]
+        }).with_columns(
+            pl.col("geo_id").cast(pl.Int32)
+        )
+
+        geo_df = _get_scatter_geo_df(vorlage)
+        if geo_df.is_empty():
+            return []
+            
+        merged = merged.join(geo_df, on="geo_id", how="inner")
+        
+        merged = merged.with_columns(
+            residual_ja=(pl.col("actual_ja") - pl.col("predicted_ja")),
+            residual_bet=(pl.col("actual_bet") - pl.col("predicted_bet"))
+        )
+        
+        return merged.to_dicts()

@@ -4,6 +4,8 @@ document.addEventListener('alpine:init', () => {
         loading: false,
         error: '',
         points: [],
+        geoData: null,
+        geoDataLoading: false,
 
         metrics: [],
         scopes: [],
@@ -154,14 +156,14 @@ document.addEventListener('alpine:init', () => {
         },
 
         usesWahlenSection() {
-            if (this.chartType === 'histogram') {
+            if (this.chartType === 'histogram' || this.chartType === 'map') {
                 return this.xMetric === 'wahlen_result';
             }
             return [this.xMetric, this.yMetric, this.sizeMetric].includes('wahlen_result');
         },
 
         usesAbstimmungenSection() {
-            if (this.chartType === 'histogram') {
+            if (this.chartType === 'histogram' || this.chartType === 'map') {
                 return this.xMetric === 'abstimmung_result';
             }
             return [this.xMetric, this.yMetric, this.sizeMetric].includes('abstimmung_result');
@@ -383,7 +385,20 @@ document.addEventListener('alpine:init', () => {
             return this.metricName(metricId);
         },
 
-        renderPlot() {
+        async renderPlot() {
+            if (this.chartType === 'map') {
+                this.loading = true;
+                try {
+                    await this.loadGeoData();
+                    this.renderMapPlot();
+                } catch (err) {
+                    this.error = err.message || 'Geodaten konnten nicht geladen werden.';
+                    console.error(err);
+                } finally {
+                    this.loading = false;
+                }
+                return;
+            }
             const sizeRaw = this.points.map((p) => p.size_value || 0);
             const sizes = this.scaledSizes(sizeRaw);
 
@@ -458,14 +473,23 @@ document.addEventListener('alpine:init', () => {
                 if (this.showRegression) {
                     const xs = [];
                     const ys = [];
+                    const ws = [];
+                    const isWeighted = (this.xMetric === 'ja_prozent' || this.yMetric === 'ja_prozent');
+
                     this.points.forEach((p) => {
                         if (p.x_value !== null && p.x_value !== undefined && p.y_value !== null && p.y_value !== undefined) {
                             xs.push(p.x_value);
                             ys.push(p.y_value);
+                            if (isWeighted) {
+                                const wVal = (p.ja_stimmen || 0) + (p.nein_stimmen || 0);
+                                ws.push(wVal);
+                            } else {
+                                ws.push(1);
+                            }
                         }
                     });
 
-                    const regression = this.calculateRegressionLine(xs, ys);
+                    const regression = this.calculateRegressionLine(xs, ys, ws);
                     if (regression) {
                         traces.push({
                             type: 'scatter',
@@ -722,7 +746,7 @@ document.addEventListener('alpine:init', () => {
             };
         },
 
-        calculateRegressionLine(xs, ys) {
+        calculateRegressionLine(xs, ys, ws) {
             const n = xs.length;
             if (n < 2) return null;
 
@@ -732,42 +756,51 @@ document.addEventListener('alpine:init', () => {
             const validIndices = [];
             for (let i = 0; i < n; i++) {
                 if (isFinite(regXs[i]) && isFinite(regYs[i])) {
-                    validIndices.push(i);
+                    const w = ws ? ws[i] : 1;
+                    if (isFinite(w) && w > 0) {
+                        validIndices.push(i);
+                    }
                 }
             }
 
             const k = validIndices.length;
             if (k < 2) return null;
 
-            let sumX = 0;
-            let sumY = 0;
-            let sumXY = 0;
-            let sumXX = 0;
+            let sumW = 0;
+            let sumWX = 0;
+            let sumWY = 0;
+            let sumWXY = 0;
+            let sumWXX = 0;
 
             for (let idx of validIndices) {
                 const xVal = regXs[idx];
                 const yVal = regYs[idx];
-                sumX += xVal;
-                sumY += yVal;
-                sumXY += xVal * yVal;
-                sumXX += xVal * xVal;
+                const wVal = ws ? ws[idx] : 1;
+                sumW += wVal;
+                sumWX += wVal * xVal;
+                sumWY += wVal * yVal;
+                sumWXY += wVal * xVal * yVal;
+                sumWXX += wVal * xVal * xVal;
             }
 
-            const denominator = k * sumXX - sumX * sumX;
+            if (sumW === 0) return null;
+
+            const denominator = sumW * sumWXX - sumWX * sumWX;
             if (denominator === 0) return null;
 
-            const slope = (k * sumXY - sumX * sumY) / denominator;
-            const intercept = (sumY - slope * sumX) / k;
+            const slope = (sumW * sumWXY - sumWX * sumWY) / denominator;
+            const intercept = (sumWY - slope * sumWX) / sumW;
 
-            const meanY = sumY / k;
+            const meanY = sumWY / sumW;
             let totalSumSquares = 0;
             let residualSumSquares = 0;
             for (let idx of validIndices) {
                 const xVal = regXs[idx];
                 const yVal = regYs[idx];
+                const wVal = ws ? ws[idx] : 1;
                 const predictedY = slope * xVal + intercept;
-                totalSumSquares += Math.pow(yVal - meanY, 2);
-                residualSumSquares += Math.pow(yVal - predictedY, 2);
+                totalSumSquares += wVal * Math.pow(yVal - meanY, 2);
+                residualSumSquares += wVal * Math.pow(yVal - predictedY, 2);
             }
             const r2 = totalSumSquares === 0 ? 0 : 1 - (residualSumSquares / totalSumSquares);
 
@@ -821,13 +854,208 @@ document.addEventListener('alpine:init', () => {
             return mode ? mode.name : this.colorMetric;
         },
 
+        async loadGeoData() {
+            if (this.geoData) return;
+            this.geoDataLoading = true;
+            try {
+                const linkRes = await fetch(`/api/abst/${this.vorlageId}/geodata`);
+                if (!linkRes.ok) throw new Error('Geodaten-Link konnte nicht abgerufen werden.');
+                const geoLink = await linkRes.json();
+                if (!geoLink) throw new Error('Keine Geodaten für diese Vorlage vorhanden.');
+
+                const proxiedLink = `/proxy-geodata/?url=${encodeURIComponent(geoLink)}`;
+                const geoRes = await fetch(proxiedLink);
+                if (!geoRes.ok) throw new Error('Geodaten konnten nicht geladen werden.');
+                this.geoData = await geoRes.json();
+            } catch (err) {
+                console.error("Fehler beim Laden der Geodaten:", err);
+                throw err;
+            } finally {
+                this.geoDataLoading = false;
+            }
+        },
+
+        renderMapPlot() {
+            if (!this.geoData) return;
+
+            const container = document.getElementById('scatterplot-map-container');
+            const width = container.clientWidth || 800;
+            const height = container.clientHeight || 600;
+
+            const svg = d3.select("#scatterplot-map");
+            svg.selectAll("*").remove();
+
+            svg.attr("viewBox", [0, 0, width, height])
+               .attr("shape-rendering", "geometricPrecision");
+
+            const g = svg.append("g");
+
+            const zoom = d3.zoom()
+                .scaleExtent([1, 8])
+                .on("zoom", (e) => {
+                    g.attr("transform", e.transform);
+                });
+
+            svg.call(zoom);
+
+            const projection = d3.geoIdentity().reflectY(true);
+            const path = d3.geoPath().projection(projection);
+
+            const objects = this.geoData.objects || {};
+            let vogeKey = Object.keys(objects).find(k => k.startsWith('k4voge'));
+            let zaehlKey = Object.keys(objects).find(k => k.toLowerCase().startsWith('zaehlkreise_zh_wint'));
+            let lakeKey = Object.keys(objects).find(k => k.startsWith('K4seen'));
+            let swissKey = Object.keys(objects).find(k => k.startsWith('Ksuis') || k.startsWith('K4suis'));
+            let kantKey = Object.keys(objects).find(k => k.startsWith('k4kant'));
+
+            let features = [];
+            let zaehlkreisId = null;
+            if (zaehlKey) {
+                const zaehlkreisFeatures = topojson.feature(this.geoData, objects[zaehlKey]).features;
+                if (zaehlkreisFeatures.length > 0) {
+                    zaehlkreisId = zaehlkreisFeatures[0].properties.id;
+                }
+            }
+            
+            const hasZaehlkreisResults = zaehlkreisId && this.points.some(p => p.geo_id === zaehlkreisId);
+
+            let vogeFeatures = topojson.feature(this.geoData, objects[vogeKey]).features;
+            if (hasZaehlkreisResults) {
+                vogeFeatures = vogeFeatures.filter(f => {
+                    const id = f.properties ? (f.properties.vogeId || f.properties.id || f.id) : f.id;
+                    return id !== 261 && id !== 230;
+                });
+            }
+            
+            features = features.concat(vogeFeatures);
+            
+            if (hasZaehlkreisResults && zaehlKey) {
+                features = features.concat(topojson.feature(this.geoData, objects[zaehlKey]).features);
+            }
+
+            features.forEach(f => {
+                const id = f.properties ? (f.properties.id || f.properties.vogeId || f.id) : f.id;
+                f.id = id;
+                if (f.properties) {
+                    f.properties.id = id;
+                }
+            });
+
+            // Fit size to projection
+            const featureCollection = { type: "FeatureCollection", features: features };
+            projection.fitSize([width, height], featureCollection);
+
+            const validValues = this.points
+                .map(p => p.x_value)
+                .filter(v => v !== null && v !== undefined);
+
+            const minVal = validValues.length ? Math.min(...validValues) : 0;
+            const maxVal = validValues.length ? Math.max(...validValues) : 100;
+
+            let colorScale;
+            if (this.xMetric === 'ja_prozent') {
+                colorScale = d3.scaleLinear()
+                    .domain([20, 50, 80])
+                    .range(["#e53935", "#ffffff", "#0b12cd"]);
+            } else if (this.xMetric === 'stimmbeteiligung') {
+                colorScale = d3.scaleSequential(d3.interpolateBlues)
+                    .domain([minVal, maxVal]);
+            } else {
+                colorScale = d3.scaleSequential(d3.interpolateViridis)
+                    .domain([minVal, maxVal]);
+            }
+
+            const pointsMap = new Map();
+            this.points.forEach(p => {
+                pointsMap.set(p.geo_id, p);
+            });
+
+            // Draw areas
+            g.selectAll(".area")
+                .data(features)
+                .join("path")
+                .attr("class", "area")
+                .attr("d", path)
+                .attr("stroke", "#ffffff")
+                .attr("stroke-width", 0.3)
+                .attr("fill", d => {
+                    const id = d.properties ? (d.properties.id || d.properties.vogeId || d.id) : d.id;
+                    const p = pointsMap.get(id);
+                    if (p && p.x_value !== null && p.x_value !== undefined) {
+                        return colorScale(p.x_value);
+                    }
+                    return "#eef2f7";
+                })
+                .append("title")
+                .text(d => {
+                    const id = d.properties ? (d.properties.id || d.properties.vogeId || d.id) : d.id;
+                    const p = pointsMap.get(id);
+                    let label = d.properties ? (d.properties.name || d.properties.vogeName || id) : id;
+                    if (p && p.x_value !== null && p.x_value !== undefined) {
+                        label += ` (${p.kanton})\n${this.metricName(this.xMetric)}: ${p.x_value.toFixed(2)}`;
+                        if (this.xMetric === 'ja_prozent' || this.xMetric === 'stimmbeteiligung') {
+                            label += '%';
+                        }
+                    } else {
+                        label += "\nKeine Daten";
+                    }
+                    return label;
+                });
+
+            // Draw lakes
+            if (lakeKey) {
+                g.selectAll(".lake")
+                    .data(topojson.feature(this.geoData, objects[lakeKey]).features)
+                    .join("path")
+                    .attr("class", "lake")
+                    .attr("d", path)
+                    .attr("fill", "#cce6ff")
+                    .attr("stroke", "#b0d4de")
+                    .attr("stroke-width", 0.5);
+            }
+
+            // Draw canton boundaries
+            if (kantKey) {
+                g.selectAll(".canton-outline")
+                    .data(topojson.feature(this.geoData, objects[kantKey]).features)
+                    .join("path")
+                    .attr("class", "canton-outline")
+                    .attr("d", path)
+                    .attr("fill", "none")
+                    .attr("stroke", "#333333")
+                    .attr("stroke-width", 1.0)
+                    .attr("pointer-events", "none");
+            }
+
+            // Draw Swiss national border
+            if (swissKey) {
+                g.append("path")
+                    .datum(topojson.mesh(this.geoData, objects[swissKey]))
+                    .attr("d", path)
+                    .attr("fill", "none")
+                    .attr("stroke", "#111111")
+                    .attr("stroke-width", 1.5)
+                    .attr("pointer-events", "none");
+            }
+
+            // Draw logo overlay
+            svg.append("image")
+                .attr("href", "/static/abst/imgs/logo.png")
+                .attr("x", width - 170)
+                .attr("y", height - 35)
+                .attr("width", 150)
+                .attr("height", 30)
+                .attr("opacity", 0.7);
+        },
+
         downloadPng() {
             const timestamp = new Date().toISOString().replace('T', '_').replace(/\..+/, '').replace(/:/g, '-');
+            const suffix = this.chartType === 'map' ? 'map' : `${this.yMetric}`;
             Plotly.downloadImage('scatterplot', {
                 format: 'png',
                 width: 1920,
                 height: 1080,
-                filename: `scatterplot_${this.vorlageId}_${this.xMetric}_${this.yMetric}_${timestamp}`,
+                filename: `scatterplot_${this.vorlageId}_${this.xMetric}_${suffix}_${timestamp}`,
             });
         },
 

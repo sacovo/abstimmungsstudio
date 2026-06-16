@@ -22,6 +22,7 @@ from abst.schema import (
     ResultsKantonSchema,
     ResultsTotalSchema,
     VorlageListingSchema,
+    ResidualPointSchema,
 )
 from abst.store import (
     get_abst_result_history,
@@ -685,6 +686,67 @@ def get_correlations_data(request, vorlage_id: int, metric_id: str = "ja_prozent
     from abst.store import get_correlations
     try:
         return get_correlations(vorlage_id, metric_id)
+    except Exception as exc:
+        raise HttpError(400, str(exc)) from exc
+
+
+@router.get("{vorlage_id}/residuals", response=list[ResidualPointSchema])
+def get_residuals(request, vorlage_id: int):
+    from abst.store import get_residuals_data
+    try:
+        return get_residuals_data(vorlage_id)
+    except Exception as exc:
+        raise HttpError(400, str(exc)) from exc
+
+
+@router.get("{vorlage_id}/residuals/export")
+def export_residuals(request, vorlage_id: int):
+    from django.http import HttpResponse
+    from abst.store import get_residuals_data
+    import io
+    import pandas as pd
+    
+    try:
+        data = get_residuals_data(vorlage_id)
+        if not data:
+            return HttpResponse("No data available", status=400)
+            
+        df = pd.DataFrame(data)
+        
+        columns_map = {
+            "geo_id": "Gemeinde-ID",
+            "name": "Gemeinde",
+            "kanton": "Kanton",
+            "anzahl_stimmberechtigte": "Stimmberechtigte",
+            "predicted_ja": "Prognose Ja (%)",
+            "actual_ja": "Resultat Ja (%)",
+            "residual_ja": "Abweichung Ja (%)",
+            "predicted_bet": "Prognose Beteiligung (%)",
+            "actual_bet": "Resultat Beteiligung (%)",
+            "residual_bet": "Abweichung Beteiligung (%)"
+        }
+        
+        export_cols = [col for col in columns_map.keys() if col in df.columns]
+        df_export = df[export_cols].rename(columns=columns_map)
+        
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+            df_export.to_excel(writer, sheet_name="Residuals", index=False)
+            
+            workbook = writer.book
+            worksheet = writer.sheets["Residuals"]
+            for i, col in enumerate(df_export.columns):
+                column_len = max(df_export[col].astype(str).str.len().max(), len(col)) + 3
+                worksheet.set_column(i, i, column_len)
+                
+        output.seek(0)
+        
+        response = HttpResponse(
+            output.read(),
+            content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        response["Content-Disposition"] = f'attachment; filename="residuals_vorlage_{vorlage_id}.xlsx"'
+        return response
     except Exception as exc:
         raise HttpError(400, str(exc)) from exc
 

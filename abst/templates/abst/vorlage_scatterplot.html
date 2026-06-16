@@ -62,7 +62,10 @@
                     <div x-show="error" style="position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 15; background: rgba(255,255,255,0.9);">
                         <p class="red-text" x-text="error"></p>
                     </div>
-                    <div id="scatterplot" style="width: 100%; height: 100%;"></div>
+                    <div id="scatterplot" x-show="chartType !== 'map'" style="width: 100%; height: 100%;"></div>
+                    <div id="scatterplot-map-container" x-show="chartType === 'map'" style="width: 100%; height: 100%; background-color: #040f2d; position: relative;" x-cloak>
+                        <svg id="scatterplot-map" width="100%" height="100%"></svg>
+                    </div>
                 </div>
             </div>
 
@@ -77,6 +80,7 @@
                                 <select x-model="chartType" @change="onChartTypeChange" x-ref="chartTypeSelect">
                                     <option value="scatter">Scatterplot (Punktdiagramm)</option>
                                     <option value="histogram">Histogramm (Verteilung)</option>
+                                    <option value="map">Karte (Geografisch)</option>
                                 </select>
                                 <label>Layout</label>
                             </div>
@@ -113,7 +117,7 @@
                             </div>
 
                             <div style="display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin-top: 0.5rem; margin-bottom: 0.5rem;">
-                                <label style="margin-bottom: 0;">
+                                <label style="margin-bottom: 0;" x-show="chartType !== 'map'">
                                     <input type="checkbox" class="filled-in" x-model="xLog" @change="renderPlot()" />
                                     <span>Log. X-Achse/Variable</span>
                                 </label>
@@ -191,7 +195,7 @@
                             </div>
                         </div>
 
-                        <div class="section">
+                        <div class="section" x-show="chartType !== 'map'">
                             <h6 style="margin: 0.5rem 0; font-weight: 600;">Farben & Layout</h6>
 
                             <div class="input-field" x-show="chartType === 'scatter'">
@@ -251,5 +255,7 @@
 </article>
 
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://unpkg.com/topojson-client@3"></script>
 <script src="{% static 'abst/js/scatterplot.js' %}"></script>
 {% endblock %}

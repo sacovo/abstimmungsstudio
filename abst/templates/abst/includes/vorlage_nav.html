@@ -61,6 +61,11 @@
                 <i class="material-symbols-outlined" style="color: #4caf50;">insights</i>Korrelationen
             </a>
         </li>
+        <li>
+            <a href="{% url 'abst:vorlage_residuals' vorlage.vorlagen_id %}" class="black-text" style="display: flex; align-items: center; gap: 8px;">
+                <i class="material-symbols-outlined" style="color: #e53935;">analytics</i>Ausreisser & Abweichungen
+            </a>
+        </li>
         {% if user.is_authenticated %}
         <li>
             <a href="{% url 'abst:vorlage_behavior' vorlage.vorlagen_id %}" class="black-text" style="display: flex; align-items: center; gap: 8px;">
@@ -116,6 +121,11 @@
         <li>
             <a href="{% url 'abst:vorlage_correlations' vorlage.vorlagen_id %}">
                 <i class="material-symbols-outlined left">insights</i>Korrelationen
+            </a>
+        </li>
+        <li>
+            <a href="{% url 'abst:vorlage_residuals' vorlage.vorlagen_id %}">
+                <i class="material-symbols-outlined left">analytics</i>Ausreisser & Abweichungen
             </a>
         </li>
         {% if user.is_authenticated %}
@@ -198,6 +208,7 @@ document.addEventListener('alpine:init', () => {
             if (window.location.pathname.includes('analyse')) return 'analyse/';
             if (window.location.pathname.includes('behavior')) return 'behavior/';
             if (window.location.pathname.includes('correlations')) return 'correlations/';
+            if (window.location.pathname.includes('residuals')) return 'residuals/';
             return 'map/';
         },
 

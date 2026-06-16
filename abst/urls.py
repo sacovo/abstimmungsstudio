@@ -29,6 +29,11 @@ urlpatterns = [
         name="vorlage_behavior",
     ),
     path(
+        "<int:vorlage_id>/residuals/",
+        views.vorlage_residuals_view,
+        name="vorlage_residuals",
+    ),
+    path(
         "<int:vorlage_id>/compare/<int:other_id>/",
         views.vorlage_compare_view,
         name="vorlage_compare",

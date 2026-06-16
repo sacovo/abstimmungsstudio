@@ -195,6 +195,9 @@ class ScatterPointSchema(Schema):
     size_value: float | None = None
     color_value: float | str | None = None
 
+    ja_stimmen: int | None = None
+    nein_stimmen: int | None = None
+
 
 class ScatterOptionsSchema(Schema):
     metrics: list[ScatterMetricOptionSchema]
@@ -203,3 +206,22 @@ class ScatterOptionsSchema(Schema):
     parteien: list[WahlenOptionSchema]
     parteigruppen: list[WahlenOptionSchema]
     lager: list[WahlenOptionSchema]
+
+
+class ResidualPointSchema(Schema):
+    geo_id: int
+    name: str
+    kanton: str
+    kanton_id: int
+
+    predicted_ja: float
+    actual_ja: float
+    residual_ja: float
+
+    predicted_bet: float
+    actual_bet: float
+    residual_bet: float
+
+    anzahl_stimmberechtigte: int
+
+
