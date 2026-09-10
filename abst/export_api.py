@@ -38,12 +38,16 @@ SCHEMA = "abst-deck/1"
 # ("K4voge_20250101_gf"). The deck should not have to guess at prefixes, so
 # every layer is renamed to a fixed key and stripped down to the properties
 # that are actually drawn or joined on.
+#
+# Matched in lower case: the 2025 dataset writes "K4voge_…", the 2026 one
+# "k4voge_…". Matching letter for letter silently dropped the municipalities
+# and cantons — the two layers the map is made of.
 GEO_LAYERS = {
-    "K4suis": ("land", ()),
-    "K4kant": ("kantone", ("kantId", "kantName")),
-    "K4voge": ("gemeinden", ("vogeId", "vogeName", "kantId")),
+    "k4suis": ("land", ()),
+    "k4kant": ("kantone", ("kantId", "kantName")),
+    "k4voge": ("gemeinden", ("vogeId", "vogeName", "kantId")),
     "zaehlkreise": ("zaehlkreise", ("id", "name", "vogeId", "kantId")),
-    "K4seen": ("seen", ("name",)),
+    "k4seen": ("seen", ("name",)),
 }
 
 
@@ -91,6 +95,22 @@ def export_vorlagen(
     ]
 
 
+@router.get("metriken")
+def export_metriken(request, search: str | None = None):
+    """The metrics available for the scatter axes, id and label.
+
+    There are close to two hundred of them since the commune statistics
+    arrived; nobody guesses those ids, so the build script can list them.
+    """
+    metriken = _metrik_liste()
+    if search:
+        needle = search.lower()
+        metriken = [
+            m for m in metriken if needle in m["name"].lower() or needle in m["id"].lower()
+        ]
+    return metriken
+
+
 @router.get("geo/{stand_date}")
 def export_geo(request, stand_date: str):
     """The TopoJSON of one GeoStand, with layers renamed and slimmed down.
@@ -117,7 +137,7 @@ def slim_topology(topo: dict) -> dict:
     """
     objects: dict[str, dict] = {}
     for key, layer in topo.get("objects", {}).items():
-        prefix = key.split("_")[0]
+        prefix = key.split("_")[0].lower()
         if prefix not in GEO_LAYERS:
             continue
         target, fields = GEO_LAYERS[prefix]
@@ -319,10 +339,34 @@ def _add_quoten(eintrag: dict) -> None:
     )
 
 
-def _streuung(vorlage_id: int, **kwargs) -> dict:
+def _metric_format(metric_id: str) -> str:
+    """Which number format the deck should label an axis with.
+
+    Guessing this on the deck side stopped working once the commune
+    statistics arrived: most of them are counts, and "8'432 %" is not a
+    rounding error, it is a wrong statement. The name of the format is one
+    of the deck's own (see theme/composables/useChartTheme.ts).
+    """
+    if metric_id in ("ja_prozent", "stimmbeteiligung", "wahlen_result", "abstimmung_result"):
+        return "percent"
+    if "_pct" in metric_id:
+        return "percent"
+    if "rate_per_1000" in metric_id:
+        return "dec"
+    return "int"
+
+
+def _metrik_liste() -> list[dict[str, str]]:
     from abst.api import _scatter_metrics
 
-    namen = {m["id"]: m["name"] for m in _scatter_metrics()}
+    return [
+        {"id": m["id"], "name": m["name"], "format": _metric_format(m["id"])}
+        for m in _scatter_metrics()
+    ]
+
+
+def _streuung(vorlage_id: int, **kwargs) -> dict:
+    namen = {m["id"]: m["name"] for m in _metrik_liste()}
 
     try:
         df = get_scatterplot_data(vorlage_id=vorlage_id, **kwargs)
@@ -349,13 +393,17 @@ def _streuung(vorlage_id: int, **kwargs) -> dict:
             for r in df.to_dicts()
         ]
 
+    def achse(metric_id: str) -> dict:
+        return {
+            "id": metric_id,
+            "name": namen.get(metric_id, metric_id),
+            "format": _metric_format(metric_id),
+        }
+
     return {
-        "x": {"id": kwargs["x_metric"], "name": namen.get(kwargs["x_metric"], "")},
-        "y": {"id": kwargs["y_metric"], "name": namen.get(kwargs["y_metric"], "")},
-        "groesse": {
-            "id": kwargs["size_metric"],
-            "name": namen.get(kwargs["size_metric"], ""),
-        },
+        "x": achse(kwargs["x_metric"]),
+        "y": achse(kwargs["y_metric"]),
+        "groesse": achse(kwargs["size_metric"]),
         "punkte": punkte,
     }
 

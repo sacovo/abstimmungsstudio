@@ -820,3 +820,66 @@ class ExportApiTests(TestCase):
         self.assertEqual(total["stimmbeteiligung"], 25.0)
         # Any predicted part makes the whole figure a projection.
         self.assertEqual(total["status"], "prediction")
+
+    def test_metric_format_follows_the_metric_id(self):
+        """The deck labels its axes with this; a count is not a percentage."""
+        from abst.export_api import _metric_format
+
+        self.assertEqual(_metric_format("ja_prozent"), "percent")
+        self.assertEqual(_metric_format("stimmbeteiligung"), "percent")
+        self.assertEqual(_metric_format("pop_foreign_ratio_pct_2024"), "percent")
+        self.assertEqual(_metric_format("pop_change_pct_10yr"), "percent")
+        self.assertEqual(_metric_format("pop_comp_births_rate_per_1000_2024"), "dec")
+        self.assertEqual(_metric_format("pop_total_2024"), "int")
+        self.assertEqual(_metric_format("anzahl_stimmberechtigte"), "int")
+
+    def test_metriken_are_listable_and_searchable(self):
+        from django.test import override_settings
+
+        with override_settings(EXPORT_TOKENS=["geheim"]):
+            kopf = {"X-Abst-Token": "geheim"}
+            alle = self.client.get("/api/export/metriken", headers=kopf).json()
+            self.assertGreater(len(alle), 100)
+            self.assertTrue(all({"id", "name", "format"} <= set(m) for m in alle))
+
+            treffer = self.client.get(
+                "/api/export/metriken", {"search": "stimmbeteiligung"}, headers=kopf
+            ).json()
+            self.assertEqual([m["id"] for m in treffer], ["stimmbeteiligung"])
+
+    def test_slim_topology_matches_layer_names_in_any_case(self):
+        """2025 writes "K4voge_…", 2026 writes "k4voge_…".
+
+        Matching letter for letter dropped exactly the two layers the map is
+        made of, and left a file that still looked plausible: lakes, outline
+        and counting districts were all there.
+        """
+        from abst.export_api import slim_topology
+
+        def topo(prefix_kant, prefix_voge):
+            return {
+                "transform": {"scale": [1, 1], "translate": [0, 0]},
+                "arcs": [],
+                "objects": {
+                    f"{prefix_kant}_20260101_gf_ohne_seen": {
+                        "type": "GeometryCollection",
+                        "geometries": [
+                            {"type": "Polygon", "arcs": [[0]],
+                             "properties": {"kantId": 1, "kantName": "Zürich"}}
+                        ],
+                    },
+                    f"{prefix_voge}_20260101_gf": {
+                        "type": "GeometryCollection",
+                        "geometries": [
+                            {"type": "Polygon", "arcs": [[0]],
+                             "properties": {"vogeId": 1, "vogeName": "Aeugst", "kantId": 1}}
+                        ],
+                    },
+                },
+            }
+
+        for kant, voge in [("K4kant", "K4voge"), ("k4kant", "k4voge")]:
+            with self.subTest(schreibweise=f"{kant}/{voge}"):
+                objects = slim_topology(topo(kant, voge))["objects"]
+                self.assertEqual(set(objects), {"kantone", "gemeinden"})
+                self.assertEqual(len(objects["gemeinden"]["geometries"]), 1)
