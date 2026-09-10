@@ -78,6 +78,22 @@ REGION_MAPPING = {
     'Valais / Wallis': 'Valais',
 }
 
+DEUTSCHSCHWEIZ_KANTONE = {
+    'Zürich', 'Bern', 'Bern / Berne', 'Luzern', 'Uri', 'Schwyz', 'Obwalden', 'Nidwalden', 'Zug',
+    'Aargau', 'Thurgau', 'St. Gallen', 'Appenzell Ausserrhoden', 'Appenzell Innerrhoden',
+    'Schaffhausen', 'Glarus', 'Graubünden', 'Graubünden / Grigioni / Grischun', 'Solothurn',
+    'Basel-Stadt', 'Basel-Landschaft'
+}
+
+ROMANDIE_KANTONE = {
+    'Jura', 'Vaud', 'Waadt', 'Fribourg', 'Freiburg', 'Fribourg / Freiburg',
+    'Neuchâtel', 'Neuenburg', 'Genève', 'Genf', 'Valais', 'Wallis', 'Valais / Wallis'
+}
+
+TESSIN_KANTONE = {
+    'Ticino', 'Tessin'
+}
+
 _r_initialized = False
 lphom = None
 ro = None
@@ -162,7 +178,8 @@ def calculate_behavior(
     source_type: str, 
     source_id: int | None = None, 
     wahlen_scope: str = "partei",
-    return_df: bool = False
+    return_df: bool = False,
+    region: str | None = None
 ):
     # Initialize R and check dependencies
     init_r()
@@ -317,6 +334,17 @@ def calculate_behavior(
         
     df_joined = df_joined.drop_nulls(subset=["target_ja", "target_nein", "target_enthaltung"])
     df_joined = df_joined.filter(pl.col("target_stimmberechtigte") > 0)
+    if region:
+        if region == 'Deutschschweiz':
+            df_joined = df_joined.filter(pl.col("kanton").is_in(DEUTSCHSCHWEIZ_KANTONE))
+        elif region == 'Romandie':
+            df_joined = df_joined.filter(pl.col("kanton").is_in(ROMANDIE_KANTONE))
+        elif region == 'Tessin':
+            df_joined = df_joined.filter(pl.col("kanton").is_in(TESSIN_KANTONE))
+        else:
+            df_joined = df_joined.filter(
+                (pl.col("region") == region) | (pl.col("kanton") == region)
+            )
     if df_joined.is_empty():
         raise ValueError("No matching municipalities found between source and target.")
         
@@ -460,8 +488,8 @@ def calculate_behavior(
         res_dict["region_probs"] = region_probs
     return res_dict
 
-def generate_behavior_excel(target_id: int, source_type: str, source_id: int | None = None, wahlen_scope: str = "partei"):
-    results = calculate_behavior(target_id, source_type, source_id, wahlen_scope, return_df=True)
+def generate_behavior_excel(target_id: int, source_type: str, source_id: int | None = None, wahlen_scope: str = "partei", region: str | None = None):
+    results = calculate_behavior(target_id, source_type, source_id, wahlen_scope, return_df=True, region=region)
     
     output = io.BytesIO()
     matrix = np.array(results["matrix"])

@@ -46,7 +46,7 @@
         }
     </style>
 
-    <div x-data="behaviorAnalysisView('{{ vorlage.vorlagen_id }}')" x-init="init()">
+    <div x-data="behaviorAnalysisView('{{ vorlage.vorlagen_id }}', '{{ vorlage.region }}')" x-init="init()">
         <div class="row behavior-layout">
             <div class="col s12 behavior-layout-left">
                 <div id="sankey-container" style="width: 100%; height: 74vh; background: #040f2d; position: relative; border-radius: 12px; overflow: hidden; border: 1px solid rgba(0,0,0,0.08);">
@@ -101,6 +101,66 @@
                                 </div>
                             </div>
 
+                            <!-- Regionen-Filter (only for CH votes) -->
+                            <div class="section" x-show="vorlageRegion === 'CH'" x-cloak style="padding: 0; margin-top: 1rem;">
+                                <div class="input-field">
+                                    <select x-model="selectedRegion" x-ref="regionSelect">
+                                        <option value="" selected>Ganze Schweiz</option>
+                                        <optgroup label="Sprachregionen">
+                                            <option value="Deutschschweiz">Deutschschweiz</option>
+                                            <option value="Romandie">Romandie</option>
+                                            <option value="Tessin">Tessin</option>
+                                        </optgroup>
+                                        <optgroup label="Grossregionen">
+                                            <option value="Zürich">Zürich</option>
+                                            <option value="Bern">Bern</option>
+                                            <option value="Zentralschweiz">Zentralschweiz</option>
+                                            <option value="Basel">Basel</option>
+                                            <option value="Ostschweiz">Ostschweiz</option>
+                                            <option value="Aargau">Aargau</option>
+                                            <option value="Graubünden">Graubünden</option>
+                                            <option value="Ticino">Ticino</option>
+                                            <option value="Vaud">Vaud</option>
+                                            <option value="Fribourg">Fribourg</option>
+                                            <option value="Neuchâtel">Neuchâtel</option>
+                                            <option value="Genève">Genève</option>
+                                            <option value="Valais">Valais</option>
+                                            <option value="Solothurn">Solothurn</option>
+                                            <option value="Jura">Jura</option>
+                                        </optgroup>
+                                        <optgroup label="Einzelne Kantone">
+                                            <option value="Zürich">Zürich (ZH)</option>
+                                            <option value="Bern">Bern (BE)</option>
+                                            <option value="Luzern">Luzern (LU)</option>
+                                            <option value="Uri">Uri (UR)</option>
+                                            <option value="Schwyz">Schwyz (SZ)</option>
+                                            <option value="Obwalden">Obwalden (OW)</option>
+                                            <option value="Nidwalden">Nidwalden (NW)</option>
+                                            <option value="Glarus">Glarus (GL)</option>
+                                            <option value="Zug">Zug (ZG)</option>
+                                            <option value="Freiburg">Freiburg (FR)</option>
+                                            <option value="Solothurn">Solothurn (SO)</option>
+                                            <option value="Basel-Stadt">Basel-Stadt (BS)</option>
+                                            <option value="Basel-Landschaft">Basel-Landschaft (BL)</option>
+                                            <option value="Schaffhausen">Schaffhausen (SH)</option>
+                                            <option value="Appenzell Ausserrhoden">Appenzell Ausserrhoden (AR)</option>
+                                            <option value="Appenzell Innerrhoden">Appenzell Innerrhoden (AI)</option>
+                                            <option value="St. Gallen">St. Gallen (SG)</option>
+                                            <option value="Graubünden">Graubünden (GR)</option>
+                                            <option value="Aargau">Aargau (AG)</option>
+                                            <option value="Thurgau">Thurgau (TG)</option>
+                                            <option value="Tessin">Tessin (TI)</option>
+                                            <option value="Waadt">Waadt (VD)</option>
+                                            <option value="Wallis">Wallis (VS)</option>
+                                            <option value="Neuenburg">Neuenburg (NE)</option>
+                                            <option value="Genf">Genf (GE)</option>
+                                            <option value="Jura">Jura (JU)</option>
+                                        </optgroup>
+                                    </select>
+                                    <label>Region / Kanton filtern</label>
+                                </div>
+                            </div>
+
                             <!-- Wahl-Ebene (only for election source) -->
                             <div class="section" x-show="isElectionSelected()" x-cloak style="padding: 0; margin-top: 1rem;">
                                 <div class="input-field">
@@ -149,8 +209,10 @@
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script>
 document.addEventListener('alpine:init', () => {
-    Alpine.data('behaviorAnalysisView', (vorlageId) => ({
+    Alpine.data('behaviorAnalysisView', (vorlageId, vorlageRegion) => ({
         vorlageId: vorlageId,
+        vorlageRegion: vorlageRegion,
+        selectedRegion: '',
         loading: false,
         options: [],
         selectedOptionId: '',
@@ -239,6 +301,9 @@ document.addEventListener('alpine:init', () => {
                 // Initialize select element
                 setTimeout(() => {
                     M.FormSelect.init(this.$refs.sourceSelect);
+                    if (this.$refs.regionSelect) {
+                        M.FormSelect.init(this.$refs.regionSelect);
+                    }
                 }, 100);
             } catch (err) {
                 this.error = err.message;
@@ -275,6 +340,9 @@ document.addEventListener('alpine:init', () => {
                 url += `&source_id=${selectedOpt.vote_id}`;
             } else if (selectedOpt.type === 'election') {
                 url += `&wahlen_scope=${this.wahlenScope}`;
+            }
+            if (this.selectedRegion) {
+                url += `&region=${encodeURIComponent(this.selectedRegion)}`;
             }
             
             try {
@@ -400,9 +468,15 @@ document.addEventListener('alpine:init', () => {
             const sourceName = selectedOpt.name.replace(/^(Abstimmung:|Wahl:)\s*/, '');
             const targetName = "{{ vorlage.name }}";
 
+            let titleText = "Wählerwanderung";
+            if (this.selectedRegion) {
+                titleText += ` (${this.selectedRegion})`;
+            }
+            titleText += `:<br><span style="font-size: 18px; font-weight: normal; color: #90caf9;">${sourceName}</span><br><span style="font-size: 18px; font-weight: normal; color: #90caf9;">➔ ${targetName}</span>`;
+
             const layout = {
                 title: {
-                    text: `Wählerwanderung:<br><span style="font-size: 18px; font-weight: normal; color: #90caf9;">${sourceName}</span><br><span style="font-size: 18px; font-weight: normal; color: #90caf9;">➔ ${targetName}</span>`,
+                    text: titleText,
                     font: {
                         size: 28,
                         family: 'Public Sans, Helvetica Neue, sans-serif',
@@ -504,6 +578,9 @@ document.addEventListener('alpine:init', () => {
                 url += `&source_id=${selectedOpt.vote_id}`;
             } else if (selectedOpt.type === 'election') {
                 url += `&wahlen_scope=${this.wahlenScope}`;
+            }
+            if (this.selectedRegion) {
+                url += `&region=${encodeURIComponent(this.selectedRegion)}`;
             }
             
             window.location.href = url;

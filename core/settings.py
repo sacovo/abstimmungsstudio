@@ -45,6 +45,11 @@ ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=[])
 
 CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
 
+# Tokens für den Präsentations-Export (siehe abst/export_api.py). Ein Deck auf
+# slides.d-o.li kann kein Session-Cookie mitschicken; es holt die Daten beim
+# Bauen mit einem dieser Tokens ab. Leer = Export abgeschaltet.
+EXPORT_TOKENS = env.list("ABST_EXPORT_TOKENS", default=[])
+
 # Application definition
 
 INSTALLED_APPS = [

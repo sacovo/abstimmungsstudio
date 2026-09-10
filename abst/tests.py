@@ -669,3 +669,154 @@ class ResidualsTests(TestCase):
             pass
 
 
+
+
+class ExportApiTests(TestCase):
+    """The export is what the presentation repository builds against.
+
+    Its shapes are a contract with theme/components/Vote*.vue over in
+    do-slidevs, and a deck keeps its copy of the answer on disk — so a
+    renamed field breaks decks that were already built.
+    """
+
+    def test_slim_topology_renames_layers_and_drops_districts(self):
+        from abst.export_api import slim_topology
+
+        topo = {
+            "type": "Topology",
+            "transform": {"scale": [1, 1], "translate": [0, 0]},
+            "arcs": [[[0, 0], [1, 1]]],
+            "objects": {
+                "K4kant_20220101_gf": {
+                    "type": "GeometryCollection",
+                    "geometries": [
+                        {
+                            "type": "Polygon",
+                            "arcs": [[0]],
+                            "properties": {"kantId": 1, "kantName": "Zürich"},
+                        }
+                    ],
+                },
+                "K4bezk_20230101_gf": {
+                    "type": "GeometryCollection",
+                    "geometries": [{"type": "Polygon", "arcs": [[0]], "properties": {}}],
+                },
+                "K4voge_20250101_gf": {
+                    "type": "GeometryCollection",
+                    "geometries": [
+                        {
+                            "type": "Polygon",
+                            "arcs": [[0]],
+                            "properties": {
+                                "vogeId": 1,
+                                "vogeName": "Aeugst am Albis",
+                                "kantId": 1,
+                                "bezkName": "Affoltern",
+                            },
+                        }
+                    ],
+                },
+            },
+        }
+
+        slim = slim_topology(topo)
+
+        self.assertEqual(set(slim["objects"]), {"kantone", "gemeinden"})
+        self.assertEqual(slim["arcs"], topo["arcs"])
+        self.assertEqual(slim["transform"], topo["transform"])
+        # Only the properties the deck joins or labels on survive.
+        self.assertEqual(
+            slim["objects"]["gemeinden"]["geometries"][0]["properties"],
+            {"vogeId": 1, "vogeName": "Aeugst am Albis", "kantId": 1},
+        )
+
+    def test_slim_topology_merges_zaehlkreise_layers(self):
+        """Zählkreise arrive as one layer per city and must end up together."""
+        from abst.export_api import slim_topology
+
+        def kreis(geo_id):
+            return {
+                "type": "Polygon",
+                "arcs": [[0]],
+                "properties": {
+                    "id": geo_id,
+                    "name": f"Kreis {geo_id}",
+                    "vogeId": 261,
+                    "kantId": 1,
+                },
+            }
+
+        topo = {
+            "transform": {"scale": [1, 1], "translate": [0, 0]},
+            "arcs": [],
+            "objects": {
+                "zaehlkreise_ZH_Stadt": {
+                    "type": "GeometryCollection",
+                    "geometries": [kreis(10261)],
+                },
+                "zaehlkreise_ZH_Wint": {
+                    "type": "GeometryCollection",
+                    "geometries": [kreis(10230)],
+                },
+            },
+        }
+
+        slim = slim_topology(topo)
+
+        self.assertEqual(list(slim["objects"]), ["zaehlkreise"])
+        self.assertEqual(len(slim["objects"]["zaehlkreise"]["geometries"]), 2)
+
+    def test_export_needs_a_configured_token(self):
+        from django.test import override_settings
+
+        with override_settings(EXPORT_TOKENS=["geheim"]):
+            self.assertEqual(self.client.get("/api/export/vorlagen").status_code, 401)
+            self.assertEqual(
+                self.client.get(
+                    "/api/export/vorlagen", headers={"X-Abst-Token": "falsch"}
+                ).status_code,
+                401,
+            )
+            self.assertEqual(
+                self.client.get(
+                    "/api/export/vorlagen", headers={"X-Abst-Token": "geheim"}
+                ).status_code,
+                200,
+            )
+
+    def test_export_is_off_without_tokens(self):
+        """An empty list must not become an open door."""
+        from django.test import override_settings
+
+        with override_settings(EXPORT_TOKENS=[]):
+            self.assertEqual(
+                self.client.get(
+                    "/api/export/vorlagen", headers={"X-Abst-Token": ""}
+                ).status_code,
+                401,
+            )
+
+    def test_total_sums_final_and_predicted_rows(self):
+        """Half-counted votes arrive as two rows; the deck shows one number."""
+        import polars as pl
+        from unittest.mock import patch
+
+        from abst.export_api import _total
+
+        df = pl.DataFrame(
+            {
+                "status": ["final", "prediction"],
+                "ja_stimmen": [300, 100],
+                "nein_stimmen": [200, 400],
+                "anzahl_stimmberechtigte": [2000, 2000],
+            }
+        )
+        with patch("abst.export_api.get_abst_result_total", return_value=df):
+            total = _total(1)
+
+        self.assertEqual(total["ja_stimmen"], 400)
+        self.assertEqual(total["nein_stimmen"], 600)
+        self.assertEqual(total["ja_prozent"], 40.0)
+        self.assertEqual(total["stimmbeteiligung"], 25.0)
+        # Any predicted part makes the whole figure a projection.
+        self.assertEqual(total["status"], "prediction")

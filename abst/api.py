@@ -619,10 +619,11 @@ def api_calculate_behavior(
     source_type: Literal["vote", "election"] = "vote",
     source_id: int | None = None,
     wahlen_scope: Literal["partei", "parteigruppe", "lager"] = "partei",
+    region: str | None = None,
 ):
     from abst.behavior import calculate_behavior
     try:
-        return calculate_behavior(vorlage_id, source_type, source_id, wahlen_scope)
+        return calculate_behavior(vorlage_id, source_type, source_id, wahlen_scope, region=region)
     except Exception as e:
         raise HttpError(400, str(e))
 
@@ -637,10 +638,11 @@ def api_export_behavior_excel(
     source_type: Literal["vote", "election"] = "vote",
     source_id: int | None = None,
     wahlen_scope: Literal["partei", "parteigruppe", "lager"] = "partei",
+    region: str | None = None,
 ):
     from abst.behavior import generate_behavior_excel
     try:
-        excel_bytes = generate_behavior_excel(vorlage_id, source_type, source_id, wahlen_scope)
+        excel_bytes = generate_behavior_excel(vorlage_id, source_type, source_id, wahlen_scope, region=region)
         response = HttpResponse(
             excel_bytes,
             content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -648,6 +650,8 @@ def api_export_behavior_excel(
         import datetime
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         source_name = f"vote_{source_id}" if source_type == "vote" else f"nrw2023_{wahlen_scope}"
+        if region:
+            source_name += f"_{region}"
         filename = f"waehlerwanderung_{vorlage_id}_{source_name}_{timestamp}.xlsx"
         response["Content-Disposition"] = (
             f'attachment; filename="{filename}"'
