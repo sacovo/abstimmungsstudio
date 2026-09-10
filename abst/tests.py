@@ -883,3 +883,24 @@ class ExportApiTests(TestCase):
                 objects = slim_topology(topo(kant, voge))["objects"]
                 self.assertEqual(set(objects), {"kantone", "gemeinden"})
                 self.assertEqual(len(objects["gemeinden"]["geometries"]), 1)
+
+    def test_parteifarben_only_cover_party_identities(self):
+        """Ja, Nein and Enthaltung must not carry a colour from here.
+
+        They are a polarity, not an identity: the slide deck renders them in
+        the poles of its own diverging ramp so a flow diagram matches the map
+        on the neighbouring slide.
+        """
+        from abst.farben import PARTEI_FARBEN, parteifarben_fuer
+
+        labels = ["SVP", "SP", "Ja (Ziel)", "Nein (Ziel)", "Enthaltung (Ziel)", "Gibtsnicht"]
+        farben = parteifarben_fuer(labels)
+
+        self.assertEqual(farben, {"SVP": PARTEI_FARBEN["SVP"], "SP": PARTEI_FARBEN["SP"]})
+
+    def test_parteifarben_are_hex_values(self):
+        from abst.farben import ALLE_FARBEN
+
+        for label, hex_wert in ALLE_FARBEN.items():
+            with self.subTest(label=label):
+                self.assertRegex(hex_wert, r"^#[0-9a-fA-F]{6}$")

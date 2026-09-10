@@ -443,6 +443,10 @@ def _wanderung(
     except Exception as exc:
         raise HttpError(400, f"Wanderung nicht berechenbar: {exc}") from exc
 
+    from abst.farben import parteifarben_fuer
+
+    labels = list(result["source_labels"]) + list(result["target_labels"])
+
     return {
         "quelle": {"id": gewaehlt["id"], "name": gewaehlt["name"]},
         "ziel": vorlage.name,
@@ -451,4 +455,8 @@ def _wanderung(
         "nach": result["target_labels"],
         "matrix": [[round(float(v), 1) for v in zeile] for zeile in result["matrix"]],
         "total": result["total_votes"],
+        # Identity colours for the parties that actually appear. Ja, Nein and
+        # Enthaltung are left out on purpose: they are a polarity, and the
+        # deck renders those in its own diverging palette.
+        "farben": parteifarben_fuer(labels),
     }

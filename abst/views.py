@@ -95,7 +95,16 @@ def proxy_geodata_view(request):
 @login_required
 def vorlage_behavior_view(request, vorlage_id):
     vorlage = get_object_or_404(Vorlage, vorlagen_id=vorlage_id)
-    return render(request, "abst/vorlage_behavior.html", {"vorlage": vorlage})
+    # The colour table lives in abst/farben.py, not in the template: the
+    # slide deck reads the same one through the export.
+    from abst.farben import ALLE_FARBEN
+
+    return render(
+        request,
+        "abst/vorlage_behavior.html",
+        # json_script serialisiert selbst — hier gehört das Dict hin, nicht ein String.
+        {"vorlage": vorlage, "farben_json": ALLE_FARBEN},
+    )
 
 
 def vorlage_correlations_view(request, vorlage_id):

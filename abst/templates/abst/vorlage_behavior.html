@@ -206,6 +206,7 @@
     </div>
 </article>
 
+{{ farben_json|json_script:"partei-farben" }}
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <script>
 document.addEventListener('alpine:init', () => {
@@ -223,58 +224,9 @@ document.addEventListener('alpine:init', () => {
         flowData: null,
         logoBase64: '',
         
-        // Colors mapping for parties and target votes
-        colors: {
-            'GRÜNE': '#84B547',
-            'SP': '#F0554D',
-            'PdA/Sol.': '#BF3939',
-            'GLP': '#C4C43D',
-            'Übrige': '#B8B8B8',
-            'Lega': '#9070D4',
-            'CSP': '#E3BA24',
-            'EVP': '#DEAA28',
-            'EDU': '#A65E42',
-            'neuwähler': '#7F7F7F',
-            'Neuwähler': '#7F7F7F',
-            'Mitte': '#D6862B',
-            'SVP': '#4B8A3E',
-            'FDP': '#3872B5',
-            'SD': '#9D9D9D',
-            'MCR': '#49A5E7',
-            'FGA': '#A83232',
-            'nichtwahler': '#D3D3D3',
-            'Nichtwähler': '#D3D3D3',
-            
-            // Target categories
-            'Ja (Ziel)': '#1f77b4',
-            'Nein (Ziel)': '#d62728',
-            'Enthaltung (Ziel)': '#7f7f7f',
-            'Exit': '#cccccc',
-            
-            // Vote sources
-            'Ja (Quelle)': '#1f77b4',
-            'Nein (Quelle)': '#d62728',
-            'Enthaltung (Quelle)': '#7f7f7f',
-
-            // Parteigruppen mappings
-            'Die Mitte': '#D6862B',
-            'Kleine Mitteparteien (LdU, EVP, CSP)': '#DEAA28',
-            'Kleine Rechtsparteien (SD, EDU, FPS, Lega, MCR)': '#A65E42',
-            'FDP.Die Liberalen (inkl. LPS)': '#3872B5',
-            'FDP. Die Liberalen (inkl. LPS)': '#3872B5',
-            'Grüne (GPS, FGA, POCH)': '#84B547',
-            'Grünliberale Partei': '#C4C43D',
-            'Kleine Linksparteien (PdA/Sol.)': '#BF3939',
-            'Schweizerische Volkspartei': '#4B8A3E',
-            'Sozialdemokratische Partei der Schweiz': '#F0554D',
-            'Übrige/Splittergruppen': '#B8B8B8',
-
-            // Parteipolitisches Lager mappings
-            'Linke und grüne Parteien (SP, PdA, Sol., POCH, FGA, GPS)': '#d62728',
-            'Traditionelle bürgerliche und rechte Parteien (FDP, Mitte, SVP, LPS, SD, EDU, FPS, Lega, MCR)': '#3872B5',
-            'Traditionelle bürgerliche und rechte Parteien (FDP, MItte, SVP, LPS, SD, EDU, FPS, Lega, MCR)': '#3872B5',
-            'Kleine Mitteparteien und andere (LdU, EVP, CSP, GLP, andere)': '#ff7f0e'
-        },
+        // Die Farbtabelle steht in abst/farben.py — eine Quelle für diese
+        // Ansicht und für den Export ins Foliendeck.
+        colors: JSON.parse(document.getElementById('partei-farben').textContent),
 
         async init() {
             this.loading = true;
