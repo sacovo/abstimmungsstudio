@@ -2,29 +2,27 @@
 
 Tool für Hochrechnungen und Analysen zu Abstimmungen in der Schweiz, auf eidgenössischer, kantonaler und kommunaler Ebene.
 
-
 ## Struktur
 
 Pro Abstimmungstag gibt es einen Datensatz mit den Geodaten:
 
-https://opendata.swiss/de/dataset/geodaten-zu-den-eidgenoessischen-abstimmungsvorlagen
-
+<https://opendata.swiss/de/dataset/geodaten-zu-den-eidgenoessischen-abstimmungsvorlagen>
 
 Die Abstimmungsresultate gibt es über drei verschiedene Packages, die Metadaten verlinken auf die verschiedenen Resourcen.
 
-https://ckan.opendata.swiss/api/3/action/package_show?id=echtzeitdaten-am-abstimmungstag-zu-eidgenoessischen-abstimmungsvorlagen
+<https://ckan.opendata.swiss/api/3/action/package_show?id=echtzeitdaten-am-abstimmungstag-zu-eidgenoessischen-abstimmungsvorlagen>
 
 ```json
 {
-    "result": {
-        "resources": [
-            {
-               "url": "...",
-               "description": {"de": "...", "fr": "..."},
-               "name": {"de": "...", "fr": "..."}
-            }
-        ]
-    }
+  "result": {
+    "resources": [
+      {
+        "url": "...",
+        "description": { "de": "...", "fr": "..." },
+        "name": { "de": "...", "fr": "..." }
+      }
+    ]
+  }
 }
 ```
 
@@ -36,66 +34,66 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
 "abstimmtag":"20190210",
 "timestamp":"2026-02-27T18:34:18",
 "spatial_reference": [
-	{
-		"spatial_unit" : "kant",
-		"spatial_date": "1979-01-01"
-	},
-	{
-		"spatial_unit" : "bezk",
-		"spatial_date": "2026-01-01"
-	},
-	{
-		"spatial_unit" : "voge",
-		"spatial_date": "2026-01-01"
-	}
+ {
+  "spatial_unit" : "kant",
+  "spatial_date": "1979-01-01"
+ },
+ {
+  "spatial_unit" : "bezk",
+  "spatial_date": "2026-01-01"
+ },
+ {
+  "spatial_unit" : "voge",
+  "spatial_date": "2026-01-01"
+ }
 ],
-"schweiz": 
+"schweiz":
 {
 "geoLevelnummer":0,
 "geoLevelname":"Schweiz",
 "nochKeineInformation": false,
 "vorlagen":[
-	{
-	"vorlagenId":6260,
-	"reihenfolgeAnzeige":6260,
-	"vorlagenTitel": [
-	{
-		"langKey" : "de",
-		"text": "Volksinitiative «Zersiedelung stoppen – für eine nachhaltige Siedlungsentwicklung (Zersiedelungsinitiative)»"
-	},
-	{
-		"langKey" : "fr",
-		"text": "Initiative populaire «Stopper le mitage – pour un développement durable du milieu bâti (initiative contre le mitage)»"
-	},
-	{
-		"langKey" : "it",
-		"text": "Iniziativa popolare «Fermare la dispersione degli insediamenti – per uno sviluppo insediativo sostenibile (Iniziativa contro la dispersione degli insediamenti)»."
-	},
-	{
-		"langKey" : "rm",
-		"text": "Iniziativa dal pievel «Franar laconstrucziun dischordinada – per in svilup durabel dals abitadis (Iniziativa cunter la construcziun dischordinada)»."
-	},
-	{
-		"langKey" : "en",
-		"text": "Popular initiative 'Stop urban sprawl - for sustainable urban development (urban sprawl initiative)'"
-	}
-	],
-	"vorlageBeendet": true,
-	"provisorisch":false,
-	"vorlageAngenommen":  false,
-	"vorlagenArtId":  3,
-	"hauptvorlagenId":  null,
+ {
+ "vorlagenId":6260,
+ "reihenfolgeAnzeige":6260,
+ "vorlagenTitel": [
+ {
+  "langKey" : "de",
+  "text": "Volksinitiative «Zersiedelung stoppen – für eine nachhaltige Siedlungsentwicklung (Zersiedelungsinitiative)»"
+ },
+ {
+  "langKey" : "fr",
+  "text": "Initiative populaire «Stopper le mitage – pour un développement durable du milieu bâti (initiative contre le mitage)»"
+ },
+ {
+  "langKey" : "it",
+  "text": "Iniziativa popolare «Fermare la dispersione degli insediamenti – per uno sviluppo insediativo sostenibile (Iniziativa contro la dispersione degli insediamenti)»."
+ },
+ {
+  "langKey" : "rm",
+  "text": "Iniziativa dal pievel «Franar laconstrucziun dischordinada – per in svilup durabel dals abitadis (Iniziativa cunter la construcziun dischordinada)»."
+ },
+ {
+  "langKey" : "en",
+  "text": "Popular initiative 'Stop urban sprawl - for sustainable urban development (urban sprawl initiative)'"
+ }
+ ],
+ "vorlageBeendet": true,
+ "provisorisch":false,
+ "vorlageAngenommen":  false,
+ "vorlagenArtId":  3,
+ "hauptvorlagenId":  null,
     "reserveInfoText": null,
-	"doppeltesMehr":true,
+ "doppeltesMehr":true,
    "staende": {
-	"jaStaendeGanz":0,
-	"neinStaendeGanz":20,
-	"anzahlStaendeGanz":20,
-	"jaStaendeHalb":0,
-	"neinStaendeHalb":6,
-	"anzahlStaendeHalb":6
+ "jaStaendeGanz":0,
+ "neinStaendeGanz":20,
+ "anzahlStaendeGanz":20,
+ "jaStaendeHalb":0,
+ "neinStaendeHalb":6,
+ "anzahlStaendeHalb":6
 },
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":36.339595634,
@@ -111,7 +109,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    {
    "geoLevelnummer":"1",
    "geoLevelname":"Zürich",
-   "resultat": 
+   "resultat":
        {
        "vorlageBeendet":true,
        "gebietAusgezaehlt":true,
@@ -128,7 +126,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"1",
    "geoLevelname":"Aeugst am Albis",
    "geoLevelParentnummer":"101",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":43.887147335,
@@ -145,7 +143,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"2",
    "geoLevelname":"Affoltern am Albis",
    "geoLevelParentnummer":"101",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":36.044428520,
@@ -162,7 +160,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"3",
    "geoLevelname":"Bonstetten",
    "geoLevelParentnummer":"101",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":37.782936738,
@@ -179,7 +177,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"4",
    "geoLevelname":"Hausen am Albis",
    "geoLevelParentnummer":"101",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":39.554317549,
@@ -196,7 +194,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"5",
    "geoLevelname":"Hedingen",
    "geoLevelParentnummer":"101",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":39.449541284,
@@ -213,7 +211,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"6",
    "geoLevelname":"Kappel am Albis",
    "geoLevelParentnummer":"101",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":38.050314465,
@@ -230,7 +228,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"7",
    "geoLevelname":"Knonau",
    "geoLevelParentnummer":"101",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":39.708265802,
@@ -247,7 +245,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"8",
    "geoLevelname":"Maschwanden",
    "geoLevelParentnummer":"101",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":37.344398340,
@@ -264,7 +262,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"9",
    "geoLevelname":"Mettmenstetten",
    "geoLevelParentnummer":"101",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":35.392217418,
@@ -283,7 +281,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"10230",
    "geoLevelname":"Winterthur Altstadt",
    "geoLevelParentnummer":"230",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":true,
        "jaStimmenInProzent":50.140891762,
@@ -300,7 +298,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
    "geoLevelnummer":"10261",
    "geoLevelname":"Zürich Kreise 1 und 2",
    "geoLevelParentnummer":"261",
-   "resultat": 
+   "resultat":
        {
        "gebietAusgezaehlt":false,
        "jaStimmenInProzent":null,
@@ -320,8 +318,7 @@ Ein Datensatz sieht so aus, wir sind an den Gemeinden und Kantonen interessiert 
 
 Für Hochrechnungen verwenden wir Sub-Matrix Factorization auf den Gemeinderesultaten der vergangenen Abstimmungen.
 
-> We address the problem of predicting aggregate vote outcomes (e.g., national) from partial outcomes (e.g., regional) that are revealed sequentially. We combine matrix factorization techniques and generalized linear models (GLMs) to obtain a flexible, efficient, and accurate algorithm. This algorithm works in two stages: First, it learns representations of the regions from high-dimensional historical data. Second, it uses these representations to fit a GLM to the partially observed results and to predict unobserved results. We show experimentally that our algorithm is able to accurately predict the outcomes of Swiss referenda, U.S. presidential elections, and German legislative elections. We also explore the regional representations in terms of ideological and cultural patterns. Finally, we deploy an online Web platform (www.predikon.ch) to provide real- time vote predictions in Switzerland and a data visualization tool to explore voting behavior. A by-product is a dataset of sequential vote results for 330 referenda and 2196 Swiss municipalities.
-
+> We address the problem of predicting aggregate vote outcomes (e.g., national) from partial outcomes (e.g., regional) that are revealed sequentially. We combine matrix factorization techniques and generalized linear models (GLMs) to obtain a flexible, efficient, and accurate algorithm. This algorithm works in two stages: First, it learns representations of the regions from high-dimensional historical data. Second, it uses these representations to fit a GLM to the partially observed results and to predict unobserved results. We show experimentally that our algorithm is able to accurately predict the outcomes of Swiss referenda, U.S. presidential elections, and German legislative elections. We also explore the regional representations in terms of ideological and cultural patterns. Finally, we deploy an online Web platform (<www.predikon.ch>) to provide real- time vote predictions in Switzerland and a data visualization tool to explore voting behavior. A by-product is a dataset of sequential vote results for 330 referenda and 2196 Swiss municipalities.
 
 Für jede Abstimmung wird eine neue Zerlegung mit den alten Resultaten erstellt, für alle Gemeinden, die im Geodatensatz enthalten sind.
 
@@ -330,3 +327,39 @@ Am Abstimmungssonntag wird von 12:00 jede Minute der aktuellste Stand der Result
 - Ein Django Backend für die API und die Weboberläche mit HTML und Javascript
 - Postgresql für Relationale Daten
 - InfluxDB für die Resultate der Gemeinden
+
+## Export für Präsentationen
+
+Das Foliendeck-Repository `do-slidevs` holt Resultate, Wählerwanderungen und
+Streudaten über `/api/export/` ab und legt sie neben die Präsentation. Ein
+gebautes Deck liegt statisch auf slides.d-o.li: es kann kein Session-Cookie
+mitschicken und diese Anwendung spricht kein CORS. Deshalb wird einmal beim
+Bauen abgeholt statt zur Laufzeit gefragt.
+
+Angemeldet wird sich mit einem Token im Kopf `X-Abst-Token`, nicht mit der
+Session — der Aufrufer ist ein Build-Skript und kein Browser. Erlaubte Tokens
+stehen in der `.env`:
+
+```
+ABST_EXPORT_TOKENS=erstes-token,zweites-token
+```
+
+**Ohne Eintrag ist der Export abgeschaltet.** Er gibt auch die
+Wählerwanderung heraus, die sonst hinter `django_auth` liegt; ein Token
+gehört deshalb behandelt wie ein Zugang.
+
+| Endpunkt                        | Inhalt                                                                                                                  |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `GET /api/export/vorlagen`      | kurze Liste zum Nachschlagen der `vorlagen_id`                                                                          |
+| `GET /api/export/{vorlagen_id}` | ein Bündel: Vorlage, Total, Kantone, Gemeinden — mit `?scatter=true` und `?behavior=true` auch Streudaten und Wanderung |
+| `GET /api/export/geo/{datum}`   | das TopoJSON eines GeoStands, Ebenen auf feste Namen umbenannt und auf die gebrauchten Eigenschaften gekürzt            |
+
+Die Form der Antworten ist eine Abmachung mit den Vue-Komponenten drüben
+(`theme/components/Vote*.vue`). Felder dazunehmen ist unproblematisch,
+umbenennen bricht die Decks — auch die schon gebauten, denn deren Daten liegen
+als Datei bei. Der Schlüssel `schema` benennt die Fassung.
+
+Die Geodaten werden beim Ausliefern verkleinert: Bezirke fallen weg, die
+Ebenen heissen `land`, `kantone`, `gemeinden`, `zaehlkreise` und `seen`, und
+je Fläche bleiben nur die Eigenschaften, auf die verbunden oder beschriftet
+wird. Aus 810 KB werden so 618 KB, mit gzip 179 KB.
