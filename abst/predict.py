@@ -1,5 +1,6 @@
 import datetime
 import io
+import time
 from logging import getLogger
 
 import numpy as np
@@ -22,37 +23,46 @@ logger = getLogger(__name__)
 
 _predict_cache = {}
 _prepare_data_cache = {}
+# Results keep arriving all through voting day, so this cache may only bridge
+# the handful of calls inside one prediction run. A permanent entry froze a
+# worker on whatever counts it happened to see first.
+_PREPARE_DATA_TTL = 10.0
 _projection_cache = {}
 
 
 def prepare_predict_data(
     abst_id: int,
 ) -> tuple[list[float], list[float], list[bool], list[int]]:
-    if abst_id not in _prepare_data_cache:
-        vorlage = Vorlage.objects.get(vorlagen_id=abst_id)
-        results = get_abst_results(abst_id)
-        geo_ids = get_geo_id_list(vorlage.tag.stand)
+    now = time.monotonic()
+    cached = _prepare_data_cache.get(abst_id)
+    if cached is not None and now - cached[0] < _PREPARE_DATA_TTL:
+        return cached[1]
 
-        df_geo = pl.DataFrame({"geo_id": geo_ids})
+    vorlage = Vorlage.objects.get(vorlagen_id=abst_id)
+    results = get_abst_results(abst_id)
+    geo_ids = get_geo_id_list(vorlage.tag.stand)
 
-        if results is None or len(results) == 0:
-            _prepare_data_cache[abst_id] = (
-                [0.0] * len(geo_ids),
-                [0.0] * len(geo_ids),
-                [True] * len(geo_ids),
-                geo_ids,
-            )
-        else:
-            df_results = pl.DataFrame(results).unique(subset=["geo_id"])
-            df = df_geo.join(df_results, on="geo_id", how="left").sort("geo_id")
+    df_geo = pl.DataFrame({"geo_id": geo_ids})
 
-            ja_values = df["ja_prozent"].fill_null(0.0).to_list()
-            beteiligung_values = df["stimmbeteiligung"].fill_null(0.0).to_list()
-            mask = (~df["status"].fill_null("missing").eq("final")).to_list()
+    if results is None or len(results) == 0:
+        data = (
+            [0.0] * len(geo_ids),
+            [0.0] * len(geo_ids),
+            [True] * len(geo_ids),
+            geo_ids,
+        )
+    else:
+        df_results = pl.DataFrame(results).unique(subset=["geo_id"])
+        df = df_geo.join(df_results, on="geo_id", how="left").sort("geo_id")
 
-            _prepare_data_cache[abst_id] = (ja_values, beteiligung_values, mask, geo_ids)
+        ja_values = df["ja_prozent"].fill_null(0.0).to_list()
+        beteiligung_values = df["stimmbeteiligung"].fill_null(0.0).to_list()
+        mask = (~df["status"].fill_null("missing").eq("final")).to_list()
 
-    return _prepare_data_cache[abst_id]
+        data = (ja_values, beteiligung_values, mask, geo_ids)
+
+    _prepare_data_cache[abst_id] = (now, data)
+    return data
 
 
 def predict_missing_results(
