@@ -1,0 +1,21 @@
+# Overlay for running Django on the host instead of inside the devcontainer.
+# Use an explicit project name so this gets its own volumes:
+#
+#   docker compose -p abst-dev \
+#     -f .devcontainer/docker-compose.yml \
+#     -f .devcontainer/docker-compose.ports.yml up -d db redis influx
+#
+# (Without -p, the project name is derived from the ".devcontainer" folder and
+# collides with every other repo that has one.)
+services:
+  db:
+    # Pinned: the data directory layout of postgres:latest changed in 18.
+    image: postgres:17
+    ports:
+      - "127.0.0.1:5433:5432"
+  redis:
+    ports:
+      - "127.0.0.1:6380:6379"
+  influx:
+    ports:
+      - "127.0.0.1:8087:8086"
