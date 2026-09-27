@@ -69,6 +69,14 @@ def predict_results_task(vorlagen_id: int):
     if known_results > 2:
         predict_and_store(vorlagen_id)
         update_vorlage(vorlagen_id)
+        # New projection means the ticker may have something to say. The
+        # ticker is a bolt-on, so a failure here must not fail the ingestion.
+        try:
+            from ticker.tasks import refresh_ticker_state
+
+            refresh_ticker_state.delay(vorlagen_id)
+        except Exception as e:
+            print(f"Could not queue ticker refresh for {vorlagen_id}: {e}")
     else:
         print(
             f"Not enough known results (only {known_results}) for vorlage {vorlagen_id} to perform prediction."

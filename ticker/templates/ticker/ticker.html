@@ -1,0 +1,33 @@
+{% extends "ticker/base_ticker.html" %}
+
+{% block title %}Liveticker {{ tag.date|date:"d.m.Y" }}{% endblock %}
+
+{% block ticker_content %}
+<div class="container ticker">
+
+    <header class="ticker-head">
+        <h1>Abstimmungssonntag {{ tag.date|date:"d.m.Y" }}</h1>
+        <p>{{ entries|length }} Vorlage{{ entries|length|pluralize:"n" }} ·
+           {% if post_count == 1 %}1 Eintrag{% else %}{{ post_count }} Einträge{% endif %}</p>
+        <p class="ticker-note">Automatisch geschrieben, redaktionell moderiert. Testbetrieb.</p>
+    </header>
+
+    {% for entry in entries %}
+    <section class="ticker-vorlage">
+        <h2>
+            <span class="ticker-region">{{ entry.vorlage.region|default:"CH" }}</span>
+            <a href="{% url 'ticker_vorlage' entry.vorlage.vorlagen_id %}">{{ entry.vorlage.name }}</a>
+        </h2>
+
+        {% if entry.posts %}
+        <ul class="ticker-list">
+            {% for post in entry.posts %}{% include "ticker/_post.html" %}{% endfor %}
+        </ul>
+        {% else %}
+        <p class="ticker-empty">Noch keine Meldung.</p>
+        {% endif %}
+    </section>
+    {% endfor %}
+
+</div>
+{% endblock %}

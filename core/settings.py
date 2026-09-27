@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "conf",
     "abst",
     "charts",
+    "ticker",
 ]
 
 MIDDLEWARE = [
@@ -274,6 +275,10 @@ UNFOLD = {
     },
 }
 
+TICKER_API_TOKEN = env.str("TICKER_API_TOKEN", default="")
+# Ticker timestamps are always shown in Swiss time, whatever TIME_ZONE is.
+TICKER_TIME_ZONE = env.str("TICKER_TIME_ZONE", default="Europe/Zurich")
+
 INFLUX_URL = env.str("INFLUX_URL", default="")
 INFLUX_TOKEN = env.str("INFLUX_TOKEN", default="")
 INFLUX_ORG = env.str("INFLUX_ORG", default="")
@@ -295,6 +300,12 @@ CELERY_BEAT_SCHEDULE = {
     "cache-historical-votes-daily": {
         "task": "abst.tasks.cache_historical_votes_task",
         "schedule": crontab(hour="8", minute="0"),
+    },
+    # Safety net: catches state changes that arrive without new results,
+    # above all a Vorlage flipping to finished.
+    "refresh-ticker-states": {
+        "task": "ticker.tasks.refresh_active_ticker_states",
+        "schedule": crontab(minute="*/5"),
     },
 }
 

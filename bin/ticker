@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""Ticker client. Stdlib only, so it runs wherever the agent runs.
+
+The agent drives the liveticker entirely through this script; it never needs
+access to the Django box.
+
+    export TICKER_API_URL=https://abst.d-o.li/api/ticker
+    export TICKER_API_TOKEN=...
+
+    ticker status                      what is going on, what is unhandled
+    ticker status --open               only Vorlagen with open events
+    ticker brief 6880                  everything needed to write one post
+    ticker post 6880 --event decided --text "..."
+    ticker dismiss 6880 outlier:1234 --reason "Kleine Gemeinde, kein Muster"
+    ticker posts --vorlage 6880        what has been published
+    ticker edit 42 --text "..."        fix a published entry
+    ticker retract 42                  take it off the public page
+    ticker note --text "Warte auf Winterthur"   remember across polls
+
+Every command takes --json for the raw payload.
+"""
+
+import argparse
+import json
+import os
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+
+DEFAULT_URL = "https://abst.d-o.li/api/ticker"
+TIMEOUT = 30
+
+
+class ApiError(Exception):
+    pass
+
+
+def request(method, path, params=None, body=None):
+    base = os.environ.get("TICKER_API_URL", DEFAULT_URL).rstrip("/")
+    token = os.environ.get("TICKER_API_TOKEN", "")
+    if not token:
+        raise ApiError("TICKER_API_TOKEN ist nicht gesetzt")
+
+    url = f"{base}{path}"
+    if params:
+        clean = {k: v for k, v in params.items() if v is not None}
+        if clean:
+            url += "?" + urllib.parse.urlencode(clean)
+
+    data = json.dumps(body).encode() if body is not None else None
+    req = urllib.request.Request(url, data=data, method=method)
+    req.add_header("Authorization", f"Bearer {token}")
+    if data:
+        req.add_header("Content-Type", "application/json")
+
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as response:
+            return json.loads(response.read().decode())
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode(errors="replace")
+        try:
+            detail = json.loads(detail).get("detail", detail)
+        except ValueError:
+            pass
+        raise ApiError(f"HTTP {exc.code}: {detail}")
+    except urllib.error.URLError as exc:
+        raise ApiError(f"Verbindung fehlgeschlagen: {exc.reason}")
+
+
+# ---------------------------------------------------------------- formatting
+
+
+def result_line(snapshot):
+    """The one line that says where a vote stands."""
+    if not snapshot:
+        return "noch kein Snapshot"
+
+    yes = snapshot.get("projected_yes")
+    if yes is None:
+        return "noch keine Hochrechnung"
+
+    parts = [f"{yes:.1f}% Ja"]
+    lo, hi = snapshot.get("ci_10"), snapshot.get("ci_90")
+    if lo is not None and hi is not None:
+        parts.append(f"Band {lo:.1f}-{hi:.1f}")
+
+    share = snapshot.get("counted_share")
+    if share is not None:
+        parts.append(
+            f"{share:.0f}% ausgezaehlt "
+            f"({snapshot.get('gemeinden_final')}/{snapshot.get('gemeinden_total')} Gem.)"
+        )
+
+    bet = snapshot.get("projected_bet")
+    if bet is not None:
+        parts.append(f"Bet {bet:.1f}%")
+
+    if snapshot.get("doppeltes_mehr"):
+        parts.append(f"Staende {snapshot.get('ja_staende')}:{snapshot.get('nein_staende')}")
+
+    if snapshot.get("finished"):
+        parts.append("ENDRESULTAT " + ("JA" if snapshot.get("angenommen") else "NEIN"))
+
+    return " | ".join(parts)
+
+
+def event_line(event):
+    age = event.get("age_minutes")
+    stamp = f" (vor {age} Min)" if age is not None and age >= 5 else ""
+    return f"[{event['severity']}] {event['key']:<18} {event['summary']}{stamp}"
+
+
+def post_line(post, with_vorlage=True):
+    head = f"#{post['id']} {post['created_at'][11:16]}"
+    if with_vorlage:
+        head += f" v{post['vorlage_id']}"
+    if post["status"] != "published":
+        head += " (zurueckgezogen)"
+    if post.get("edited"):
+        head += " (bearbeitet)"
+    return f"{head}: {post['text']}"
+
+
+def emit(args, payload, renderer):
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        renderer(payload)
+
+
+# ------------------------------------------------------------------ commands
+
+
+def cmd_status(args):
+    rows = request("GET", "/status", {"date": args.date, "open_only": args.open or None})
+
+    def render(rows):
+        total_open = sum(len(r["pending"]) for r in rows)
+        print(f"{len(rows)} Vorlagen | {total_open} offene Events")
+        print()
+        for row in rows:
+            marker = "!" if row["pending"] else " "
+            print(f"{marker} {row['vorlage_id']} {row['region'] or '??':<3} {row['name']}")
+            print(f"    {result_line(row['snapshot'])}")
+
+            meta = [f"{row['post_count']} Posts"]
+            last = row["last_post_minutes"]
+            meta.append(f"letzter vor {last} Min" if last is not None else "noch nichts gepostet")
+            if row["stale_minutes"] is not None and row["stale_minutes"] > 15:
+                meta.append(f"Snapshot {row['stale_minutes']} Min alt")
+            print(f"    {' | '.join(meta)}")
+
+            for event in row["pending"]:
+                print(f"    OFFEN {event_line(event)}")
+            print()
+
+        if total_open:
+            print("Weiter: ticker brief <id>, dann ticker post / ticker dismiss")
+
+    emit(args, rows, render)
+
+
+def cmd_brief(args):
+    data = request("GET", f"/vorlage/{args.vorlage}", {"posts": args.posts})
+
+    def render(data):
+        snapshot = data["snapshot"]
+        print(f"Vorlage {data['vorlage_id']} ({data['region']})")
+        print(data["name"])
+        print()
+        print(f"STAND  {result_line(snapshot)}")
+        print()
+
+        kantone = snapshot.get("kantone") or []
+        if kantone:
+            final = [k for k in kantone if k["status"] == "final"]
+            print(f"KANTONE ({len(final)}/{len(kantone)} definitiv)")
+            for kanton in kantone:
+                flag = "*" if kanton["status"] == "final" else " "
+                print(f"  {flag} {kanton['kanton']:<3} {kanton['yes']}% Ja")
+            print()
+
+        large = snapshot.get("large") or []
+        if large:
+            print("GROSSE GEMEINDEN (* = definitiv ausgezaehlt)")
+            for place in large:
+                flag = "*" if place["status"] == "final" else " "
+                residual = (
+                    f" ({place['residual']:+.1f} Pp. vs. Erwartung)"
+                    if place.get("residual") is not None
+                    else ""
+                )
+                print(
+                    f"  {flag} {place['name']:<22} {place['yes']}% Ja | "
+                    f"{place['voters']} Stimmber.{residual}"
+                )
+            print()
+
+        outliers = snapshot.get("outliers") or []
+        if outliers:
+            print("AUSREISSER")
+            for row in outliers:
+                print(
+                    f"    {row['name']} ({row['kanton']}): {row['yes']}% statt "
+                    f"{row['expected']}% erwartet, {row['residual']:+.1f} Pp., "
+                    f"{row['voters']} Stimmber."
+                )
+            print()
+
+        if data["pending"]:
+            print("OFFENE EVENTS")
+            for event in data["pending"]:
+                print(f"    {event_line(event)}")
+            print()
+
+        if data["posts"]:
+            print("BISHERIGE POSTS (neueste zuerst)")
+            for post in data["posts"]:
+                print(f"    {post_line(post, with_vorlage=False)}")
+            print()
+
+        if data["notes"]:
+            print("NOTIZEN")
+            for note in data["notes"]:
+                print(f"    #{note['id']} {note['text']}")
+            print()
+
+    emit(args, data, render)
+
+
+def cmd_post(args):
+    post = request(
+        "POST",
+        f"/vorlage/{args.vorlage}/posts",
+        body={
+            "text": args.text,
+            "event_key": args.event,
+            "author": args.author,
+            "force": args.force,
+        },
+    )
+    emit(args, post, lambda p: print(f"Publiziert: {post_line(p)}"))
+
+
+def cmd_posts(args):
+    posts = request(
+        "GET",
+        "/posts",
+        {
+            "vorlage_id": args.vorlage,
+            "limit": args.limit,
+            "include_retracted": args.all or None,
+        },
+    )
+
+    def render(posts):
+        if not posts:
+            print("Noch keine Eintraege")
+            return
+        for post in posts:
+            print(post_line(post))
+
+    emit(args, posts, render)
+
+
+def cmd_edit(args):
+    post = request("PATCH", f"/posts/{args.post}", body={"text": args.text, "by": args.by})
+    emit(args, post, lambda p: print(f"Bearbeitet: {post_line(p)}"))
+
+
+def cmd_retract(args):
+    status = "published" if args.restore else "retracted"
+    post = request("PATCH", f"/posts/{args.post}", body={"status": status, "by": args.by})
+    verb = "Wieder publiziert" if args.restore else "Zurueckgezogen"
+    emit(args, post, lambda p: print(f"{verb}: {post_line(p)}"))
+
+
+def cmd_dismiss(args):
+    keys = request(
+        "POST",
+        f"/vorlage/{args.vorlage}/dismiss",
+        body={"keys": args.key, "reason": args.reason},
+    )
+    emit(args, keys, lambda ks: print("Verworfen: " + ", ".join(ks)))
+
+
+def cmd_note(args):
+    if args.resolve:
+        note = request("PATCH", f"/notes/{args.resolve}")
+        emit(args, note, lambda n: print(f"#{n['id']} abgehakt"))
+        return
+
+    if args.text:
+        note = request(
+            "POST", "/notes", body={"text": args.text, "vorlage_id": args.vorlage}
+        )
+        emit(args, note, lambda n: print(f"Notiz #{n['id']} gespeichert"))
+        return
+
+    notes = request("GET", "/notes", {"vorlage_id": args.vorlage})
+
+    def render(notes):
+        if not notes:
+            print("Keine Notizen")
+            return
+        for note in notes:
+            scope = note["vorlage_id"] or "global"
+            print(f"#{note['id']} {note['created_at'][11:16]} ({scope}) {note['text']}")
+
+    emit(args, notes, render)
+
+
+# --------------------------------------------------------------------- parser
+
+
+def build_parser():
+    parser = argparse.ArgumentParser(
+        prog="ticker", description="Liveticker steuern (Abstimmungsstudio)"
+    )
+    parser.add_argument("--json", action="store_true", help="Rohdaten ausgeben")
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("status", help="Stand aller Vorlagen + offene Events")
+    p.add_argument("--date", help="Abstimmungstag YYYY-MM-DD")
+    p.add_argument("--open", action="store_true", help="Nur mit offenen Events")
+    p.set_defaults(func=cmd_status)
+
+    p = sub.add_parser("brief", help="Detailbriefing zu einer Vorlage")
+    p.add_argument("vorlage", type=int)
+    p.add_argument("--posts", type=int, default=5)
+    p.set_defaults(func=cmd_brief)
+
+    p = sub.add_parser("post", help="Eintrag publizieren")
+    p.add_argument("vorlage", type=int)
+    p.add_argument("--text", required=True)
+    p.add_argument("--event", help="Event-Key, der damit abgehandelt wird")
+    p.add_argument("--author", default="agent")
+    p.add_argument("--force", action="store_true", help="Cooldown ignorieren")
+    p.set_defaults(func=cmd_post)
+
+    p = sub.add_parser("posts", help="Publizierte Eintraege auflisten")
+    p.add_argument("--vorlage", type=int)
+    p.add_argument("--limit", type=int, default=20)
+    p.add_argument("--all", action="store_true", help="Auch zurueckgezogene")
+    p.set_defaults(func=cmd_posts)
+
+    p = sub.add_parser("edit", help="Publizierten Eintrag umschreiben")
+    p.add_argument("post", type=int)
+    p.add_argument("--text", required=True)
+    p.add_argument("--by", default="agent")
+    p.set_defaults(func=cmd_edit)
+
+    p = sub.add_parser("retract", help="Eintrag von der Seite nehmen")
+    p.add_argument("post", type=int)
+    p.add_argument("--restore", action="store_true", help="Stattdessen wiederherstellen")
+    p.add_argument("--by", default="agent")
+    p.set_defaults(func=cmd_retract)
+
+    p = sub.add_parser("dismiss", help="Event verwerfen, ohne zu posten")
+    p.add_argument("vorlage", type=int)
+    p.add_argument("key", nargs="+")
+    p.add_argument("--reason", default="")
+    p.set_defaults(func=cmd_dismiss)
+
+    p = sub.add_parser("note", help="Interne Notizen (nicht oeffentlich)")
+    p.add_argument("--text")
+    p.add_argument("--vorlage", type=int)
+    p.add_argument("--resolve", type=int, help="Notiz-ID abhaken")
+    p.set_defaults(func=cmd_note)
+
+    return parser
+
+
+def main():
+    args = build_parser().parse_args()
+    try:
+        args.func(args)
+    except ApiError as exc:
+        print(f"Fehler: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

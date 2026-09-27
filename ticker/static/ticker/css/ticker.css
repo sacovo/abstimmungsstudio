@@ -1,0 +1,116 @@
+/* Liveticker. Deliberately plain: a date, a line, the next line. */
+
+.ticker {
+    max-width: 44rem;
+    padding-bottom: 4rem;
+}
+
+.ticker-head {
+    margin: 2.5rem 0 3rem;
+}
+
+.ticker-head h1 {
+    font-family: "Bricolage Grotesque", sans-serif;
+    font-weight: 700;
+    margin-bottom: .4rem;
+}
+
+.ticker-head p {
+    margin: .2rem 0;
+    color: #555;
+}
+
+.ticker-note {
+    font-size: .85rem;
+    color: #777;
+}
+
+.ticker-back {
+    font-size: .85rem;
+    color: #555;
+}
+
+.ticker-back:hover {
+    color: #111;
+    text-decoration: underline;
+}
+
+.ticker-vorlage {
+    border-top: 1px solid #e0e0e0;
+    padding-top: 1.5rem;
+    margin-bottom: 2.5rem;
+}
+
+.ticker-vorlage h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    line-height: 1.4;
+    margin: 0 0 1rem;
+}
+
+.ticker-vorlage h2 a {
+    color: #111;
+}
+
+.ticker-region {
+    display: inline-block;
+    font-family: "Roboto Mono", monospace;
+    font-size: .7rem;
+    letter-spacing: .05em;
+    background: #111;
+    color: #fff;
+    padding: .15rem .4rem;
+    border-radius: 2px;
+    margin-right: .5rem;
+    vertical-align: .15rem;
+}
+
+.ticker-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.ticker-post {
+    display: grid;
+    grid-template-columns: 3.5rem 1fr;
+    gap: .75rem;
+    padding: .75rem 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.ticker-post time {
+    font-family: "Roboto Mono", monospace;
+    font-size: .8rem;
+    color: #888;
+    padding-top: .15rem;
+}
+
+.ticker-post p {
+    margin: 0;
+    line-height: 1.55;
+}
+
+.ticker-edited,
+.ticker-empty {
+    grid-column: 2;
+    font-size: .8rem;
+    color: #999;
+}
+
+.ticker-empty {
+    display: block;
+    margin: 0;
+}
+
+@media (max-width: 600px) {
+    .ticker-post {
+        grid-template-columns: 1fr;
+        gap: .15rem;
+    }
+
+    .ticker-edited,
+    .ticker-empty {
+        grid-column: 1;
+    }
+}

@@ -1,0 +1,25 @@
+{% extends "abst/base.html" %}
+{% load static %}
+
+{% block nav %}
+<div class="nav-wrapper">
+    <a href="{% url 'ticker' %}" class="brand-logo left" style="margin-left: 20px;">
+        <i class="material-symbols-outlined left">rss_feed</i>
+        <h1>Abstimmungsticker</h1>
+        <span class="subtitle">by digital/organizing</span>
+    </a>
+</div>
+{% endblock %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'ticker/css/ticker.css' %}">
+{% block ticker_content %}{% endblock %}
+
+<script>
+    // Reload while the tab is actually being looked at. Small audience, so a
+    // full reload is cheaper than keeping a connection open.
+    setInterval(() => {
+        if (document.visibilityState === "visible") location.reload();
+    }, 30000);
+</script>
+{% endblock %}

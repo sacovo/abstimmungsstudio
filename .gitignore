@@ -176,3 +176,6 @@ media
 
 
 .env
+
+# Liveticker: lokaler Demo-Szenario-Stand
+.ticker_demo_step

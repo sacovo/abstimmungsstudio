@@ -1,0 +1,6 @@
+{% load ticker_extras %}
+<li class="ticker-post">
+    <time datetime="{{ post.created_at|ticker_iso }}">{{ post.created_at|ticker_time }}</time>
+    <p>{{ post.text }}</p>
+    {% if post.edited_at %}<span class="ticker-edited">nachträglich bearbeitet</span>{% endif %}
+</li>
