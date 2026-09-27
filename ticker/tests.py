@@ -77,6 +77,19 @@ class FirstSignalTests(SimpleTestCase):
         events = detect(snapshot(), snapshot())
         self.assertNotIn("first_signal", kinds(events))
 
+    def test_a_curtain_raiser_does_not_swallow_the_first_projection(self):
+        # An entry written before counting starts carries a snapshot with no
+        # projection. The first real projection must still be reported.
+        before_counting = snapshot(
+            counted_share=0.0, projected_yes=None, ci_10=None, ci_90=None
+        )
+        events = detect(snapshot(), before_counting)
+        self.assertIn("first_signal", kinds(events))
+
+    def test_an_empty_previous_snapshot_is_treated_as_no_post(self):
+        events = detect(snapshot(), {})
+        self.assertIn("first_signal", kinds(events))
+
 
 class DecidedTests(SimpleTestCase):
     def test_one_sided_band_is_decided(self):

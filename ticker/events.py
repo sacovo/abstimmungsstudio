@@ -92,7 +92,12 @@ def detect(snapshot: dict, previous: dict | None) -> list[dict]:
     if yes is None or share < MIN_COUNTED_SHARE:
         return events
 
-    if previous is None:
+    previous_yes = previous.get("projected_yes") if previous else None
+
+    # A post written before counting starts (a curtain-raiser, say) carries a
+    # snapshot without a projection. That must still count as "nothing said
+    # about the result yet", or the first real projection goes unreported.
+    if previous_yes is None:
         events.append(
             _event(
                 "first_signal",
@@ -103,33 +108,30 @@ def detect(snapshot: dict, previous: dict | None) -> list[dict]:
                 share=share,
             )
         )
-    else:
-        prev_yes = previous.get("projected_yes")
-        if prev_yes is not None:
-            if _side(prev_yes) != _side(yes):
-                events.append(
-                    _event(
-                        f"flip:{_side(yes)}:{counted}",
-                        "flip",
-                        SEVERITY_MUST,
-                        f"Trendwende: Hochrechnung kippt auf {_side(yes).upper()} "
-                        f"({prev_yes:.1f}% → {yes:.1f}%)",
-                        yes=yes,
-                        previous_yes=prev_yes,
-                    )
-                )
-            elif abs(yes - prev_yes) >= SHIFT_PP:
-                events.append(
-                    _event(
-                        f"shift:{counted}",
-                        "shift",
-                        SEVERITY_MAYBE,
-                        f"Hochrechnung verschiebt sich um "
-                        f"{yes - prev_yes:+.1f} Pp. auf {yes:.1f}% Ja",
-                        yes=yes,
-                        previous_yes=prev_yes,
-                    )
-                )
+    elif _side(previous_yes) != _side(yes):
+        events.append(
+            _event(
+                f"flip:{_side(yes)}:{counted}",
+                "flip",
+                SEVERITY_MUST,
+                f"Trendwende: Hochrechnung kippt auf {_side(yes).upper()} "
+                f"({previous_yes:.1f}% → {yes:.1f}%)",
+                yes=yes,
+                previous_yes=previous_yes,
+            )
+        )
+    elif abs(yes - previous_yes) >= SHIFT_PP:
+        events.append(
+            _event(
+                f"shift:{counted}",
+                "shift",
+                SEVERITY_MAYBE,
+                f"Hochrechnung verschiebt sich um "
+                f"{yes - previous_yes:+.1f} Pp. auf {yes:.1f}% Ja",
+                yes=yes,
+                previous_yes=previous_yes,
+            )
+        )
 
     if share >= DECIDED_MIN_SHARE and _decided(snapshot):
         events.append(
